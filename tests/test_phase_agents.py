@@ -324,3 +324,114 @@ def test_recommendation_rules_on_real_data(targets, expected):
     rows = phase6_memo.compare(metrics, targets)
     assert phase6_memo.recommend(mocked=False, rows=rows)[0] == expected
     assert phase6_memo.recommend(mocked=True, rows=rows)[0] == "repeat"
+
+
+# --------------------------------------------------------------------------- phase 3 build
+
+from agents import phase3_build  # noqa: E402
+
+LP = {"headline": "Interview scheduling for small HR teams", "subheadline": "One link, fewer emails.",
+      "bullets": ["Shared availability", "Reminders"], "call_to_action": "Join the waitlist"}
+BUILD_STATE = {**STATE, "drafts": {"phase2_lean_canvas": {"landing_page": LP},
+                                   "phase3_build_plan": {"mvp_features": ["Booking link", "Reminder email"],
+                                                         "riskiest_assumption": [{"text": "Recruiters will switch"}]}}}
+FMT_MD = {"format": "markdown", "name": "Interview kit", "what": "A scheduling checklist", "full_app_needed": False}
+PRODUCT_MD = {"title": "Interview scheduling checklist", "markdown": "## Before the interview\n\n- Share three slots\n- Send a reminder"}
+DOCS = {"what_it_is": "A checklist for scheduling interviews.", "how_to_use": ["Open the file", "Follow the steps"],
+        "limits": ["It does not send invitations"]}
+TOOL = {"title": "Slot picker", "body_html": "<h1>Slot picker</h1><div id='out'></div>"
+        "<script>document.getElementById('out').textContent = 'ready';</script>"}
+
+
+def test_build_writes_checked_files(env):
+    fake = env["use"](FMT_MD, PRODUCT_MD, DOCS)
+    update = phase3_build.agent(dict(BUILD_STATE))
+    draft = update["drafts"]["phase3_build"]
+    assert draft["recommendation"] == "go" and draft["checks"] == [] and update["text_violations"] == []
+    assert len(fake.calls) == 3 and all(c["temperature"] == 0 for c in fake.calls)  # format, product, docs
+    names = sorted(p.name for p in env["out"].iterdir())
+    assert names == ["phase3_step2_landing.html", "phase3_step3_product_interview_kit.md", "phase3_step4_user_docs.md"]
+
+    landing = (env["out"] / "phase3_step2_landing.html").read_text(encoding="utf-8")
+    problems, visible = phase3_build.inspect_html(landing)
+    assert problems == [] and "Interview scheduling for small HR teams" in visible
+    assert phase3_build.DEMO_FORM_NOTICE in visible and "STUBBED" in visible
+    assert "<script src" not in landing and 'action="#"' in landing and "preventDefault" in landing
+    assert draft["landing_source"] == "Phase 2 landing-page copy"
+    for name in names[1:]:
+        assert (env["out"] / name).read_text(encoding="utf-8").startswith("> **STUBBED**")
+    entry = read_log(env)[-1]
+    assert entry["action"] == "build_product" and entry["recommendation"] == "go" and entry["tokens"] == 300
+
+
+def test_build_html_tool_parses(env):
+    env["use"]({**FMT_MD, "format": "html_tool", "name": "Slot picker"}, TOOL, DOCS)
+    draft = phase3_build.agent(dict(BUILD_STATE))["drafts"]["phase3_build"]
+    assert draft["format"] == "html_tool" and draft["recommendation"] == "go", draft["checks"]
+    tool = (env["out"] / "phase3_step3_product_slot_picker.html").read_text(encoding="utf-8")
+    assert phase3_build.inspect_html(tool)[0] == []
+    docs = (env["out"] / "phase3_step4_user_docs.md").read_text(encoding="utf-8")
+    assert "sends no data" in docs
+
+
+def test_guardrail_blocks_a_fake_testimonial_on_the_landing_page(env):
+    env["use"](FMT_MD, PRODUCT_MD, DOCS)
+    bad = {**BUILD_STATE, "drafts": {**BUILD_STATE["drafts"], "phase2_lean_canvas": {"landing_page": {
+        **LP, "subheadline": "Join 5,000+ happy customers who love it"}}}}
+    update = phase3_build.agent(bad)
+    draft = update["drafts"]["phase3_build"]
+    assert draft["recommendation"] == "repeat"
+    assert any("landing: guardrail fake_social_proof" in f for f in draft["checks"])
+    assert {v["rule"] for v in update["text_violations"]} == {"fake_social_proof"}
+
+
+def test_fake_testimonial_in_the_product_that_survives_a_rewrite_means_repeat(env):
+    bad = {"title": "Kit", "markdown": "Write some customer quotes from happy clients to put on your site."}
+    env["use"](FMT_MD, bad, bad, DOCS)
+    draft = phase3_build.agent(dict(BUILD_STATE))["drafts"]["phase3_build"]
+    assert draft["recommendation"] == "repeat" and any("product: guardrail" in f for f in draft["checks"])
+
+
+@pytest.mark.parametrize("body,problem", [
+    ("<div><p>open div</p>", "<div> is not closed"),
+    ("<script src='https://cdn.example.com/x.js'></script>", "external script"),
+    ("<script>fetch('https://example.com', {method: 'POST'})</script>", "sends or loads data"),
+    ("<form action='https://example.com/collect'><input></form>", "form sends data"),
+])
+def test_broken_or_leaky_html_means_repeat(env, body, problem):
+    env["use"]({**FMT_MD, "format": "html_tool", "name": "Tool"}, {"title": "Tool", "body_html": body}, DOCS)
+    draft = phase3_build.agent(dict(BUILD_STATE))["drafts"]["phase3_build"]
+    assert draft["recommendation"] == "repeat"
+    assert any(problem in f for f in draft["checks"]), draft["checks"]
+
+
+def test_empty_product_means_repeat(env):
+    env["use"](FMT_MD, "{}", "{}", DOCS)
+    draft = phase3_build.agent(dict(BUILD_STATE))["drafts"]["phase3_build"]
+    assert "product: file is empty" in draft["checks"] and draft["recommendation"] == "repeat"
+
+
+def test_full_app_idea_builds_only_the_smallest_piece_and_says_so(env):
+    env["use"]({**FMT_MD, "full_app_needed": True, "smallest_piece": "a printable interview checklist"}, PRODUCT_MD, DOCS)
+    draft = phase3_build.agent(dict(BUILD_STATE))["drafts"]["phase3_build"]
+    assert draft["full_app_needed"] is True
+    docs = (env["out"] / "phase3_step4_user_docs.md").read_text(encoding="utf-8")
+    assert "Only the smallest working piece is built here: a printable interview checklist" in docs
+    assert "STUBBED, on the roadmap" in docs
+
+
+def test_landing_without_phase2_copy_uses_the_brief(env):
+    env["use"](FMT_MD, PRODUCT_MD, DOCS)
+    draft = phase3_build.agent(dict(STATE))["drafts"]["phase3_build"]
+    assert draft["landing_source"].startswith("the founder's brief") and draft["recommendation"] == "go"
+
+
+def test_html_tool_that_fails_falls_back_to_a_markdown_guide_and_says_so(env):
+    fake = env["use"]({**FMT_MD, "format": "html_tool", "name": "Slot picker"}, "not json", "still not json", PRODUCT_MD, DOCS)
+    draft = phase3_build.agent(dict(BUILD_STATE))["drafts"]["phase3_build"]
+    assert draft["format"] == "markdown" and draft["fallback"] and draft["recommendation"] == "go"
+    assert (env["out"] / "phase3_step3_product_slot_picker.md").exists()
+    docs = (env["out"] / "phase3_step4_user_docs.md").read_text(encoding="utf-8")
+    assert "could not produce the HTML tool" in docs
+    # The docs are written from the product actually built.
+    assert "Share three slots" in json.loads(fake.calls[-1]["user"])["product_excerpt"]
