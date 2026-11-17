@@ -40,9 +40,11 @@ class FakeModel:
     def __init__(self, score=4):
         self.score = score
         self.calls = []
+        self.kwargs = {}  # agent -> the call's settings (role, max_tokens, temperature)
 
-    def __call__(self, agent, system, user, role="smart", max_tokens=500):
+    def __call__(self, agent, system, user, role="smart", max_tokens=500, **kwargs):
         self.calls.append(agent)
+        self.kwargs[agent] = {"role": role, "max_tokens": max_tokens, **kwargs}
         reply = {
             "weigher": {"areas": [{"name": "invoicing pain", "weight": 2, "query": "freelancer invoicing problems"},
                                   {"name": "competitors", "weight": 1, "query": "freelance invoicing tools"}],
@@ -342,6 +344,100 @@ def test_scores_file_lists_the_claims_the_reasons_cite(run):
     orchestrator.start_run(FULL_BRIEF, "numbering")
     text = (run["out"] / "phase1_step6_scores.md").read_text(encoding="utf-8")
     assert "## Claims the scorer saw" in text and "\n0. " in text
+
+
+class FlakyModel(FakeModel):
+    """Breaks JSON on the first call to each agent in `broken`; `always` breaks every call."""
+
+    def __init__(self, broken=(), always=()):
+        super().__init__()
+        self.broken, self.always, self.seen = set(broken), set(always), set()
+
+    def __call__(self, agent, system, user, role="smart", max_tokens=500, **kwargs):
+        text, tokens, cost, model = super().__call__(agent, system, user, role, max_tokens, **kwargs)
+        first = agent not in self.seen
+        self.seen.add(agent)
+        if agent in self.always or (agent in self.broken and first):
+            return "Sure! Here is my analysis of the idea, which looks", tokens, cost, model
+        return text, tokens, cost, model
+
+
+def test_broken_json_is_retried_once(run, monkeypatch):
+    model = FlakyModel(broken={"weigher", "scorer"})
+    monkeypatch.setattr(common, "invoke_model", model)
+    r = orchestrator.start_run(FULL_BRIEF, "retry")
+    assert r["recommendation"] == "go"
+    assert model.calls.count("weigher") == 2 and model.calls.count("scorer") == 2
+    entries = {e["action"]: e for e in log_entries(run)}
+    assert entries["split_areas"]["parsed"] is True and entries["split_areas"]["retried"] is True
+    assert entries["split_areas"]["tokens"] == 200  # both calls are counted
+
+
+def test_json_failing_twice_falls_back_safely(run, monkeypatch):
+    monkeypatch.setattr(common, "invoke_model", FlakyModel(always={"scorer"}))
+    r = orchestrator.start_run(FULL_BRIEF, "no-json")
+    scored = [e for e in log_entries(run) if e["action"].startswith("score_rubric")][0]
+    assert scored["parsed"] is False and scored["retried"] is True
+    assert r["recommendation"] == "stop"  # every score falls back to 0, with the reason said
+    assert "the model gave no valid score" in (run["out"] / "phase1_step6_scores.md").read_text(encoding="utf-8")
+
+
+def test_deterministic_steps_run_at_temperature_zero(run):
+    orchestrator.start_run(FULL_BRIEF, "temperature")
+    for agent in ("weigher", "researcher", "skeptic", "scorer"):
+        assert run["model"].kwargs[agent]["temperature"] == 0, agent
+    assert run["model"].kwargs["weigher"]["role"] == "fast"
+    assert all(k["max_tokens"] <= 700 for k in run["model"].kwargs.values())
+
+
+def test_local_model_gets_json_mode_and_a_token_cap(monkeypatch):
+    import llm
+
+    for model_name, think in [("qwen3:8b", False), ("gpt-oss:20b", "low")]:
+        cfg = Settings(llm_provider="ollama", ollama_model=model_name)
+        monkeypatch.setattr(common, "settings", cfg)
+        monkeypatch.setattr(llm, "default_settings", cfg)
+        client = common._llm("fast", 600, temperature=0)
+        assert client.format == "json" and client.num_predict == 600 and client.temperature == 0
+        assert client.reasoning == think
+
+
+def test_each_area_searches_a_forum(run, monkeypatch):
+    queries = []
+    monkeypatch.setattr(tools.search, "search", lambda q, max_results=3: queries.append(q) or fake_search(q, max_results))
+    orchestrator.start_run(FULL_BRIEF, "forums")
+    state = orchestrator.get_state("forums")
+    forum = [a["forum_query"] for a in state["areas"]]
+    assert forum[0].endswith("site:reddit.com") and forum[1].endswith("site:news.ycombinator.com")
+    assert all(q in queries for q in forum)
+    research_file = next(run["out"].glob("phase1_step4_research_*.md")).read_text(encoding="utf-8")
+    assert "(forum)" in research_file and "Forum query:" in research_file
+
+
+def test_every_log_entry_has_the_run_id(run):
+    r = orchestrator.start_run(FULL_BRIEF, "ids")
+    orchestrator.resume_run("ids", decide(r, "go"))
+    entries = log_entries(run)
+    assert entries and all(e.get("run_id") == "ids" for e in entries), [e["action"] for e in entries if e.get("run_id") != "ids"]
+
+
+def test_gate_log_has_note_approved_and_overrode_stop(run):
+    run["model"].score = 1
+    r = orchestrator.start_run(FULL_BRIEF, "gate-log")
+    orchestrator.resume_run("gate-log", FounderDecision(phase=1, gate="gate_1", approved=False, outcome="repeat",
+                                                        note="I have five interviews booked"))
+    entry = [e for e in log_entries(run) if e["action"] == "gate_1_founder_decision"][0]
+    assert entry["note"] == "I have five interviews booked" and entry["approved"] is False
+    assert entry["overrode_stop"] is True and entry["run_id"] == "gate-log"
+
+
+def test_get_state_is_read_only_and_public(run):
+    assert orchestrator.get_state("nobody") is None
+    orchestrator.start_run(FULL_BRIEF, "public")
+    state = orchestrator.get_state("public")
+    assert state["awaiting_founder"] and state["pending"]["gate"] == "gate_1"
+    assert state["scores"] and state["claims"] and state["run_id"] == "public"
+    assert orchestrator.get_state("public")["pending"] == state["pending"]  # reading twice changes nothing
 
 
 def test_model_cannot_invent_sources(run, monkeypatch):
