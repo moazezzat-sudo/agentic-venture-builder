@@ -185,3 +185,44 @@ def test_unsourced_price_is_called_an_assumption(env):
     update = phase4_commercial.agent(dict(STATE))
     assert update["drafts"]["phase4_commercial"]["price_has_sourced_basis"] is False
     assert "no sourced basis" in (env["out"] / "phase4_step1_commercial.md").read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- phase 5
+
+from agents import phase5_launch  # noqa: E402
+
+LAUNCH = {
+    "segment": [{"text": "SME HR teams that hire weekly", "source": 0}],
+    "positioning": "Interview scheduling without email ping-pong",
+    "channels": [{"text": "Recruiter subreddits", "source": 0}, {"text": "LinkedIn HR groups", "source": None}],
+    "launch_sequence": ["Share the waitlist page", "Interview 5 recruiters"],
+    "store_page": {"title": "Interview scheduler", "description": "Candidates pick a slot from one link.",
+                   "bullets": ["Reminders", "Calendar sync"]},
+    "launch_posts": [{"channel": "LinkedIn", "text": "I'm building an interview scheduler for small HR teams. Feedback welcome."}],
+}
+
+
+def test_launch_draft_posts_nothing_and_uses_the_phase4_price(env):
+    fake = env["use"](LAUNCH)
+    state = {**STATE, "drafts": {"phase4_commercial": {"pricing": {"price": "250", "currency": "EGP"}}}}
+    update = phase5_launch.agent(state)
+    draft = update["drafts"]["phase5_launch"]
+    assert draft["posted"] is False and all(p["posted"] is False for p in draft["launch_posts"])
+    assert draft["store_page"]["price"] == "250 EGP" and json.loads(fake.calls[0]["user"])["price"] == "250 EGP"
+    assert draft["channels"][1]["support"] == "ASSUMPTION"
+    text = (env["out"] / "phase5_step1_launch.md").read_text(encoding="utf-8")
+    assert "Nothing has been posted" in text and "founder_approved=True" in text
+    assert _unsupported_lines(env["out"]) == []
+
+
+def test_launch_without_a_price_does_not_invent_one(env):
+    env["use"](LAUNCH)
+    draft = phase5_launch.agent(dict(STATE))["drafts"]["phase5_launch"]
+    assert draft["store_page"]["price"] is None
+
+
+def test_launch_post_posing_as_a_customer_is_flagged(env):
+    bad = {**LAUNCH, "launch_posts": [{"channel": "Reddit", "text": "Post as a happy customer: best tool ever, 5-star reviews everywhere!"}]}
+    env["use"](bad, bad)
+    rules = {v["rule"] for v in phase5_launch.agent(dict(STATE))["text_violations"]}
+    assert {"impersonation", "fake_social_proof"} <= rules
