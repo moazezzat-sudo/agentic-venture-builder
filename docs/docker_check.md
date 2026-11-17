@@ -96,9 +96,15 @@ Files a check run writes (`decision_log.json`, `outputs/phase1_*`) are test outp
    docker compose up --build
    ```
 
-   First start: `model-pull` downloads `qwen3:8b` (several GB) into the `ollama_data` volume and exits with code 0; then the app starts. Later starts reuse the volume.
+   The app starts at once; it does not wait for the model. On the first start `model-pull` downloads `qwen3:8b` (about 5 GB) into the `ollama_data` volume in the background and exits with code 0 when done. Later starts reuse the volume. Follow the download in a second window:
 
-3. **Open** `http://localhost:8000`. The sidebar must say provider `ollama`, model `qwen3:8b`.
+   ```powershell
+   docker compose logs -f model-pull
+   ```
+
+3. **Open** `http://localhost:8000` right away. The sidebar must say provider `ollama`, model `qwen3:8b`. While the model downloads, the page must show "Local model still downloading: `qwen3:8b` (about 5 GB) … `docker compose logs -f model-pull`", with a **Retry** button, and **Start Phase 1** greyed out. When the download finishes, the message goes away by itself within about 15 seconds (or click **Retry**).
+
+   Also check: `docker compose stop ollama` while the app runs must give "The local model server is not answering yet … `docker compose up -d ollama model-pull`", not an error page. Start it again with `docker compose up -d ollama`.
 
 4. **Run the same brief** as in A.6. The bundled Ollama runs on the CPU (no GPU is passed to Docker), so each step is slower than in A; that is expected.
 
@@ -109,6 +115,8 @@ Files a check run writes (`decision_log.json`, `outputs/phase1_*`) are test outp
 | Check | A (native) | B (bundled) |
 |---|---|---|
 | App opens on `localhost:8000`, sidebar shows `ollama` / `qwen3:8b` | | |
+| B only: app opens during the download, shows the download message, unlocks by itself | — | |
+| B only: `docker compose stop ollama` gives the "not answering" message | — | |
 | Brief → intake questions → progress box → gate card | | |
 | Approve/Reject recorded, result shown | | |
 | `decision_log.json` in the clone root after the run | | |

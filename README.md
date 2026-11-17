@@ -8,7 +8,7 @@ An open-source team of AI agents that takes a founder's brief toward a sellable 
 docker compose up
 ```
 
-Then open `http://localhost:8000`, fill in your brief, and answer the follow-up questions and gates in the founder web app. The first start downloads the local open-weight model (`qwen3:8b`, several GB) into a Docker volume; no account or key is needed.
+Then open `http://localhost:8000`, fill in your brief, and answer the follow-up questions and gates in the founder web app. No account or key is needed. The app opens at once; on the first start the local open-weight model (`qwen3:8b`, about 5 GB) downloads in the background, and the app says so until it is ready (progress: `docker compose logs -f model-pull`). On a slow connection, set `OLLAMA_MODEL=qwen3:4b` in `.env` for a model about half the size. With a free `GROQ_API_KEY` in `.env` the app works immediately, without waiting for the download.
 
 Already running Ollama on your machine (for example Ollama for Windows with a GPU)? Copy `.env.example` to `.env`, set `OLLAMA_BASE_URL=http://host.docker.internal:11434`, and start only the app with `docker compose up --no-deps app`.
 
