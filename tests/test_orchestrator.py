@@ -197,6 +197,43 @@ def answer_discovery(run_id, r, answers=None, confirm=True):
     return orchestrator.resume_run(run_id, {"answers": {"confirm": choice, "correction": "" if confirm else "Only UI designers"}})
 
 
+def test_credential_in_brief_is_rejected_before_the_run_starts(run):
+    marker = "sample-password-for-test"
+    brief = {**NEW_BRIEF, "learned": [f"My password is {marker}"]}
+    with pytest.raises(ValueError, match="Remove passwords") as exc:
+        orchestrator.start_run(brief, "credential-brief")
+    assert marker not in str(exc.value)
+    assert orchestrator.get_state("credential-brief") is None
+    assert run["model"].calls == []
+    assert not run["log"].exists()
+
+
+@pytest.mark.parametrize("at_gate", [False, True])
+def test_credential_in_reply_leaves_the_existing_pause_unchanged(run, at_gate):
+    run_id = "credential-reply"
+    r = orchestrator.start_run(FULL_BRIEF if at_gate else NEW_BRIEF, run_id)
+    marker = "sample-password-for-test"
+    secret = f"My password is {marker}"
+    if at_gate:
+        assert r["kind"] == "gate"
+        reply = FounderDecision(phase=r["phase"], gate=r["gate"], approved=True,
+                                outcome=r["recommendation"], note=secret)
+    else:
+        assert r["kind"] == "questions"
+        reply = {"answers": {r["questions"][0]["id"]: secret}}
+    graph = orchestrator.get_graph()
+    cfg = {"configurable": {"thread_id": run_id}}
+    before = list(graph.get_state_history(cfg))
+    log_before = run["log"].read_bytes()
+    calls_before = list(run["model"].calls)
+    with pytest.raises(ValueError, match="Remove passwords") as exc:
+        orchestrator.resume_run(run_id, reply)
+    assert marker not in str(exc.value)
+    assert list(graph.get_state_history(cfg)) == before
+    assert run["log"].read_bytes() == log_before
+    assert run["model"].calls == calls_before
+
+
 def test_discovery_conversation_comes_before_research(run):
     brief = {k: v for k, v in NEW_BRIEF.items() if k != "skills"}
     r = orchestrator.start_run(brief, "disc")

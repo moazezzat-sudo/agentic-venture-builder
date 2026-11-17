@@ -667,11 +667,27 @@ def pending(run_id: str) -> Optional[dict[str, Any]]:
     return snap.interrupts[0].value if snap.interrupts else None
 
 
+def _reject_credential_input(value: Any) -> None:
+    """Check founder input before it can enter graph state, prompts or the log."""
+    from guardrails import check_text
+
+    if isinstance(value, dict):
+        for key, item in value.items():
+            _reject_credential_input(key)
+            _reject_credential_input(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _reject_credential_input(item)
+    elif isinstance(value, (str, int)) and any(hit["rule"] == "credentials" for hit in check_text(str(value))):
+        raise ValueError("Remove passwords, card details and API keys before submitting this input.")
+
+
 def start_run(brief: dict[str, Any], run_id: str) -> dict[str, Any]:
     """Start Phase 1 from the founder's brief and run until the first pause or the end."""
     run_id = _check_run_id(run_id)
     if not isinstance(brief, dict) or not str(brief.get("idea", "")).strip():
         raise ValueError("brief must be a dict with a non-empty 'idea'")
+    _reject_credential_input((run_id, brief))
     graph = get_graph()
     if graph.get_state(_config(run_id)).values:
         raise ValueError(f"run_id {run_id!r} already exists; use resume_run or a new run_id")
@@ -692,6 +708,8 @@ def resume_run(run_id: str, decision: Union[FounderDecision, dict[str, Any]]) ->
     {"answers": {...}}. Anything else raises and the run stays paused.
     """
     run_id = _check_run_id(run_id)
+    reply = decision.model_dump() if isinstance(decision, FounderDecision) else decision
+    _reject_credential_input((run_id, reply))
     waiting = pending(run_id)
     if waiting is None:
         raise ValueError(f"run {run_id!r} is not waiting for the founder")

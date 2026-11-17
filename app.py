@@ -651,8 +651,8 @@ def render_phase_strip(st, result: dict[str, Any]) -> None:  # pragma: no cover 
             badge = f":{'violet' if status == 'MOCKED' else 'orange'}-badge[{status}]"
         chips.append(f"**{number}. {name}** {badge}")
     st.markdown(" &nbsp;·&nbsp; ".join(chips))
-    st.caption("LIVE: runs on this page. STUBBED: does not run in this app yet (drafts may exist, nothing is wired). "
-               "MOCKED: runs on fake data only (no payment provider, no real money).")
+    st.caption("LIVE: runs on this page. STUBBED: a draft or placeholder capability. "
+               "MOCKED: runs on simulated data without a payment provider or real money.")
 
 
 def render_evidence(st, state: dict[str, Any]) -> None:  # pragma: no cover - UI

@@ -9,9 +9,8 @@ The two briefs below were written for this script: confirm their wording as a te
 ## Which gates the demo shows
 
 All six phases are wired into the run, each ending at its own founder gate, but a full run takes
-about a minute of machine time on Groq (20,915 tokens; `evals/briefs/RESULTS.md`) and longer on a
-local model. So the live demo shows only **Gate 1** (and the niche gate if Gate 1 is GO): the decision
-judges care about most and the founder approval step.
+about a minute of machine time on Groq (20,915 tokens; `evals/briefs/RESULTS.md`). The live demo
+focuses on **Gate 1**, the founder approval step, and the niche gate if there is time.
 
 Set the sidebar's **Demo setting → Stop the demo after Phase** to **1** (or start the app with
 `APP_STOP_AFTER_PHASE=1`). Then GO at the last Phase 1 gate is not sent: the app says so and the run
@@ -53,7 +52,7 @@ run opened by its id (sidebar: **Open an earlier run**), not run live.
 | 1:40 | **What we don't know yet**, **What to do next**, then the **Evidence** tab. | "It says what it doesn't know. Every claim has a tier, A official to D forum, or says no source found." | A **Tier A** World Bank figure, a lighter **Tier D** forum post, a **No source found**. Expand **What I searched and why**. |
 | 2:05 | Decision: choose **Request changes**, type `Check the pitch-booking apps already used in Cairo`, click **Record my decision**. | "Nothing moves on without the founder. I can approve, reject and pick another outcome, or ask for changes with a note." | The button stays grey until a choice (and, for changes, a note). |
 | 2:25 | The next questions appear. | "It goes back to work on what I asked." | "At Gate 1 I recommended … and you chose REPEAT (your note: …)". |
-| 2:40 | Open **Run details**. | "For reviewers: the run id, the tokens, $0.00, every step in the decision log." | **Model tokens**, **Cost**, the log. |
+| 2:40 | Open **Run details**. | "The decision log shows each step, the model tokens, and the recorded cost." | **Model tokens**, **Cost**, the log. |
 | 2:55 | End. | "It recommends; the founder decides." | |
 
 If the gate says **STOP** instead, approve it and show the finished screen as in script B; the point is the same.
