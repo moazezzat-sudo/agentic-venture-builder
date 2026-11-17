@@ -11,6 +11,7 @@ from typing import Any
 
 from langgraph.types import interrupt
 
+from agents._common import text_violations
 from logger import log_action, write_output
 
 QUESTIONS: dict[str, str] = {
@@ -65,11 +66,12 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         reply = interrupt({"kind": "questions", "stage": "intake", "questions": questions})
         answers = dict((reply or {}).get("answers") or {})
     new_brief = apply_answers(brief, answers)
+    violations = text_violations({f"founder answer: {k}": v for k, v in answers.items()}, False, state.get("round", 1))
 
     log_action(
         agent="intake", action="follow_up_questions" if questions else "brief_complete", model=None,
         asked=[q["field"] for q in questions], answered=sorted(k for k, v in answers.items() if str(v).strip()),
-        still_missing=missing_fields(new_brief),
+        still_missing=missing_fields(new_brief), guardrail_violations=[v["rule"] for v in violations],
     )
     lines = [f"- **{k}**: {v}" for k, v in new_brief.items() if not _empty(v)]
     asked = "\n".join(f"- {q['question']} → {answers.get(q['field']) or '_no answer_'}" for q in questions) or "_None: the brief was complete._"
@@ -82,4 +84,5 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         "brief": new_brief,
         "founder_answers": {**(state.get("founder_answers") or {}), **{k: str(v) for k, v in answers.items()}},
         "clarifying_questions": [q["question"] for q in questions],
+        "text_violations": violations,
     }

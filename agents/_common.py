@@ -88,6 +88,57 @@ def brief_for_model(brief: dict[str, Any]) -> dict[str, Any]:
     return {k: (cut(v, 400) if isinstance(v, str) else v) for k, v in brief.items() if v not in (None, "", [], {})}
 
 
+def text_violations(texts: dict[str, Any], rewritable: bool, round_no: int) -> list[dict[str, Any]]:
+    """Run guardrails.check_text on each text. Returns one record per violation.
+
+    rewritable=False for the founder's own words (the gate recommends stop);
+    True for drafts our agents wrote (the gate recommends repeat, to rewrite them).
+    """
+    from guardrails import check_text
+
+    found = []
+    for source, text in texts.items():
+        if not str(text or "").strip():
+            continue
+        for v in check_text(str(text)):
+            found.append({"source": source, "rule": v.get("rule"), "reason": v.get("reason"),
+                          "excerpt": cut(v.get("excerpt"), 120), "rewritable": rewritable, "round": round_no})
+    return found
+
+
+def describe_violation(v: dict[str, Any]) -> str:
+    return f"{v['rule']} in {v['source']}: \"{v['excerpt']}\". {v['reason']}"
+
+
+# Used only when the model gives fewer than 5 questions. Past behaviour, never "would you buy".
+TEMPLATE_INTERVIEW_QUESTIONS = [
+    "When did this problem last come up for you? Walk me through what happened.",
+    "What did you do about it that time?",
+    "What tools or services do you use for this today, and what do they cost you?",
+    "What have you already tried that didn't work, and why did you stop?",
+    "Who else is involved when this comes up?",
+]
+
+
+def write_interview_kit(raw_questions: Any, audience: str, outcome: str) -> list[str]:
+    """Write outputs/phase1_step9_interview_kit.md (The Mom Test style) and return the questions.
+
+    Written after go, repeat and pivot; never after stop.
+    """
+    from logger import write_output
+
+    kit = [cut(q, 200) for q in (raw_questions if isinstance(raw_questions, list) else []) if str(q).strip()][:7]
+    source = "model"
+    if len(kit) < 5:
+        kit, source = list(TEMPLATE_INTERVIEW_QUESTIONS), "fixed template"
+    write_output(1, 9, "interview kit", (
+        f"# Phase 1, step 9: customer interview kit (The Mom Test style), after {outcome}\n\n"
+        f"For: {audience}\n\nAsk about past behaviour; don't describe the idea or ask whether they would buy it. "
+        f"Questions from: {source}.\n\n" + "\n".join(f"{i + 1}. {q}" for i, q in enumerate(kit)) + "\n"
+    ))
+    return kit
+
+
 def claims_markdown(claims: Iterable[dict[str, Any]]) -> str:
     """One line per claim with its support: URL and tier, our evidence, or ASSUMPTION."""
     lines = []

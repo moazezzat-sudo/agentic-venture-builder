@@ -9,6 +9,7 @@ Rules:
 - If you want to state something no snippet supports, set `"source": null`; it will be labelled ASSUMPTION. Prefer fewer claims over unsupported ones.
 - Tag each claim with the rubric criterion it bears on, one of: `problem_evidence`, `market`, `competition`, `willingness_to_pay`, `rules_risk`.
 - Tier D sources only show signs of pain or demand. Never take a number from a tier D source.
+- Market size and regulation (`market`, `rules_risk`) need tier A or B; from a tier C or D source they count only as context.
 - Never invent numbers, prices, user counts or market sizes. Copy numbers only as they appear in a snippet.
 - No praise, no predictions of income or success. Report what the sources say, including evidence against the idea.
 - At most 4 claims, each under 200 characters.

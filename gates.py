@@ -9,11 +9,13 @@ from rubric.yaml (PLAN.md sections 3b and 4).
 
 Order of checks (section 4):
   1. Guardrail violations          -> stop
-  2. A 0 on a stop_if_zero criterion -> stop
+  2. A 0 on a stop_if_zero criterion (problem evidence, competition, rules and risk) -> stop
   3. "Mostly ASSUMPTIONs"          -> stop
   4. Weighted total: >= go_min go; < stop_below stop; between -> pivot or repeat
   5. Caps: more than half the claims unsourced, or a missed Gate 1 target,
      turns go into repeat (the recommendation can't be better than repeat).
+  6. Rewritable violations (in our own drafts) turn anything but stop into repeat:
+     the drafts are rewritten in the next round.
 
 The founder then approves or overrides; that is approval.record_decision, not here.
 """
@@ -150,8 +152,13 @@ def evaluate_gate_1(
     claims: Iterable[ClaimLike],
     violations: Optional[Iterable[str]] = None,
     rubric: Optional[Mapping[str, Any]] = None,
+    rewritable_violations: Optional[Iterable[str]] = None,
 ) -> GateResult:
-    """Recommend go / repeat / pivot / stop for Gate 1 (Discover), with reasons the founder can read."""
+    """Recommend go / repeat / pivot / stop for Gate 1 (Discover), with reasons the founder can read.
+
+    violations: guardrail hits that stop the idea (banned category, the founder's own text).
+    rewritable_violations: hits in drafts our agents wrote; they can be rewritten, so -> repeat.
+    """
     rubric = rubric or load_rubric()
     d, g1 = rubric["decision"], rubric["gate_1"]
     clean = check_scores(scores, rubric)
@@ -224,6 +231,14 @@ def evaluate_gate_1(
             outcome = "repeat"
             reasons.append("Held at repeat because the Gate 1 target is not met.")
         reasons.extend(f"Target missed: {m}." for m in misses)
+
+    # 6. Draft violations: rewrite and run again
+    rewritable = [v for v in (rewritable_violations or []) if v]
+    if rewritable:
+        if outcome != "stop":
+            outcome = "repeat"
+            reasons.append("Held at repeat: a draft breaks a guardrail and must be rewritten.")
+        reasons.extend(f"Guardrail (draft): {v}" for v in rewritable)
 
     return result(outcome, reasons)
 

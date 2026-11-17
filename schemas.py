@@ -130,4 +130,7 @@ class Briefcase(TypedDict, total=False):
     stop_reason: str
     coach_notes: dict[str, Any]
     interview_kit: list[str]
-    tokens: Annotated[int, operator.add]  # model tokens used in this run
+    tokens: Annotated[int, operator.add]  # model tokens used by our agents in this run
+    # guardrails.check_text hits: {source, rule, reason, excerpt, rewritable, round}.
+    # rewritable=False: the founder's own words (gate -> stop); True: our drafts (gate -> repeat).
+    text_violations: Annotated[list[dict[str, Any]], operator.add]

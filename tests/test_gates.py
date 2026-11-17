@@ -101,7 +101,7 @@ def test_weak_idea_stop():
     assert any("below 2.0" in reason for reason in r.reasons)
 
 
-@pytest.mark.parametrize("zeroed", ["problem_evidence", "rules_risk"])
+@pytest.mark.parametrize("zeroed", ["problem_evidence", "competition", "rules_risk"])
 def test_zero_on_key_criterion_stops_whatever_total(zeroed):
     r = gates.evaluate_gate_1(scores(4, **{zeroed: 0}), GOOD_CLAIMS)
     assert r.recommendation == "stop"
@@ -111,6 +111,18 @@ def test_zero_on_key_criterion_stops_whatever_total(zeroed):
 def test_guardrail_violation_stops():
     r = gates.evaluate_gate_1(scores(4), GOOD_CLAIMS, violations=["banned category: health_advice"])
     assert r.recommendation == "stop" and "health_advice" in r.reasons[0]
+
+
+def test_competition_zero_means_a_free_tool_already_solves_it():
+    r = gates.evaluate_gate_1(scores(4, competition=0), GOOD_CLAIMS)
+    assert r.recommendation == "stop" and "competition scored 0" in r.reasons[0]
+
+
+def test_draft_violation_holds_at_repeat_but_never_upgrades_stop():
+    hit = "income_promise: 'you will earn 5000 a month'"
+    r = gates.evaluate_gate_1(scores(4), GOOD_CLAIMS, rewritable_violations=[hit])
+    assert r.recommendation == "repeat" and any(hit in reason for reason in r.reasons)
+    assert gates.evaluate_gate_1(scores(1), GOOD_CLAIMS, rewritable_violations=[hit]).recommendation == "stop"
 
 
 def test_mostly_assumptions_stops():

@@ -49,7 +49,7 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
     log_action(
         agent="skeptic", action="check_founder_claims", sources=sorted({u for c in checks for u in c["evidence"]}),
         model=usage["model"], cost=usage["cost"], tokens=usage["tokens"], round=state.get("round", 1),
-        verdicts=[c["verdict"] for c in checks],
+        parsed=usage["parsed"], verdicts=[c["verdict"] for c in checks],
     )
     rows = "\n".join(
         f"| {c['statement']} | {c['verdict']} | {c['why']} | {' '.join(c['evidence']) or 'none'} |" for c in checks

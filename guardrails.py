@@ -20,14 +20,20 @@ Rules come from CLAUDE.md and PLAN.md sections 2 and 5a:
     posing as the founder, a customer or another brand; promising income or success;
     holding, moving or refunding money; creating accounts; storing passwords or card numbers.
 
-How the checks work:
-  - check_category: keyword rules on the product description first. If no rule
-    fires, the fast model classifies the idea (logged to decision_log.json). A
-    banned verdict from either one stops the run. If the model can't be reached,
-    the rules result stands and the reason says the model check did not run.
-  - check_text: rules only (no model), so it is fast, free and repeatable. A match
-    that is negated in the same sentence ("we never post fake reviews") is not a
-    violation. Secrets (passwords, card numbers, keys) are flagged even when negated.
+How check_category works (every field of the brief, joined, is checked):
+  1. A strong keyword ("dropshipping", "trading signals", "symptom checker") -> banned.
+  2. Only ambiguous keywords ("crypto", "supplements", "handmade", "lending") -> the fast
+     model confirms. Banned if the model agrees, or if the model can't be reached or was
+     not asked (fail safe). Allowed only when the model judges it an allowed digital product.
+  3. No keyword -> the fast model classifies the idea. If the model can't be reached, the
+     idea is allowed on the keyword rules alone, and the reason says so.
+  Every model call is logged to decision_log.json.
+
+How check_text works: rules only (no model), in English, plus French and Arabic for fake
+reviews, impersonation and income promises. A negation cancels a match only when it
+governs the action itself ("we never post fake reviews"): it must sit in the same clause,
+at most three words before the match. Idioms such as "don't hesitate", "never mind",
+"no problem" and "no worries" never cancel. Secrets are flagged even when negated.
 """
 
 from __future__ import annotations
@@ -35,7 +41,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Iterable, Mapping, NamedTuple, Optional
 
 from schemas import BANNED_CATEGORIES
 
@@ -57,6 +63,48 @@ Violation = dict[str, str]
 
 _FLAGS = re.IGNORECASE
 
+# --------------------------------------------------------------------------- negation
+
+# Negation words in English, French and Arabic.
+_NEGATION_RE = re.compile(
+    r"(?<!\w)(no|not|never|without|avoid|avoids|refuse|refuses|cannot|can't|won't|don't|do not|"
+    r"doesn't|does not|isn't|aren't|mustn't|shouldn't|nor|instead of|rather than|prohibited|banned|forbidden|"
+    r"ne|n'|pas|jamais|sans|aucune?|ni|"
+    r"لا|لن|لم|ليس|بدون|أبدا|أبداً|ممنوع)(?!\w)",
+    _FLAGS,
+)
+# Idioms that contain a negation word but negate nothing. They are removed before the check.
+_IDIOM_RE = re.compile(
+    r"(?<!\w)((don't|do not|never|no|not)\s+(hesitate|mind|problem|problems|worries|worry|forget|wait|stop|"
+    r"matter|delay|excuse|doubt|care|need to ask)|not (a problem|only|just)|why not|doesn't matter|"
+    r"n'h[ée]site(z)? pas|ne t'inqui[èe]te pas|ne vous inqui[ée]tez pas|pas de (probl[èe]me|souci)|peu importe|"
+    r"لا مشكلة|لا تتردد|لا تترددي|لا تقلق|ولا يهمك|مش مشكلة)(?!\w)",
+    _FLAGS,
+)
+# Words that start a new instruction: a negation before them does not reach the match.
+_CLAUSE_WORDS = {"just", "but", "so", "then", "and", "instead", "anyway", "please", "still", "now",
+                 "mais", "alors", "juste", "et", "بس", "لكن", "و"}
+_MAX_GAP_WORDS = 3
+
+
+def _negated(text: str, start: int) -> bool:
+    """True when a negation governs the match starting at `start`.
+
+    The negation must be in the same clause, at most three words before the match,
+    with no clause word ("just", "but", "and" ...) in between. Idioms never count.
+    """
+    window = text[max(0, start - 80) : start]
+    window = re.split(r"[.!?\n;:,،؛]", window)[-1]
+    window = _IDIOM_RE.sub(" ", window)
+    negations = list(_NEGATION_RE.finditer(window))
+    if not negations:
+        return False
+    gap = window[negations[-1].end() :].split()
+    if len(gap) > _MAX_GAP_WORDS:
+        return False
+    return not any(w.lower().strip("'\"") in _CLAUSE_WORDS for w in gap)
+
+
 # --------------------------------------------------------------------------- categories
 
 CATEGORY_REASONS: dict[str, str] = {
@@ -69,62 +117,88 @@ CATEGORY_REASONS: dict[str, str] = {
     "legal_advice": "Legal advice products are banned: the system can't build products that give legal advice.",
 }
 
-CATEGORY_PATTERNS: dict[str, tuple[str, ...]] = {
-    "physical_goods": (
-        r"\bphysical (products?|goods|items?|copies|books?|stores?|shops?)\b",
-        r"\bdrop[- ]?shipping\b",
-        r"\bprint[- ]on[- ]demand\b",
-        r"\b(t[- ]?shirts?|hoodies|mugs|merch(andise)?|apparel|clothing line)\b",
-        r"\bhand[- ]?made\b",
-        r"\b(candles|jewel(le)?ry|cosmetics|skincare products|soaps?|furniture|sneakers)\b",
-        r"\bsubscription box(es)?\b",
-        r"\b3d[- ]printed\b",
-        r"\bsell(ing)? (clothes|shoes|food|coffee beans|snacks|baked goods|cakes|plants|hardware|gadgets)\b",
-        r"\bship(ping)? (products|orders|boxes|parcels|goods)\b",
-        r"\b(bakery|food truck|restaurant|caf[eé])\b",
-    ),
-    "financial_investment_crypto": (
-        r"\bcrypto(currency|currencies)?\b",
-        r"\b(bitcoin|ethereum|blockchain|defi|web3|nfts?|stablecoins?)\b",
-        r"\btoken (sale|launch|offering)\b",
-        r"\b(stock|share|options?) (picks|tips|signals|trading)\b",
-        r"\btrading (bot|signals?|platform|algorithm|course)\b",
-        r"\b(forex|fx trading|day[- ]trading)\b",
-        r"\binvest(ment|ing)? (advice|advisor|adviser|platform|app|fund|portfolio|tips|club)\b",
-        r"\brobo[- ]?advis[oe]r\b",
-        r"\b(loans?|lending|micro[- ]?finance|credit line|bnpl|buy now,? pay later)\b",
-        r"\binsurance (product|policy|policies|app|platform)\b",
-        r"\b(payment processor|money transfer|remittance|e[- ]?wallet|digital wallet|neobank)\b",
-        r"\bfinancial advice\b",
-    ),
-    "health_advice": (
-        r"\bmedical (advice|diagnos\w*|second opinion)\b",
-        r"\bdiagnos(e|es|is|ing|tic)\b.{0,40}\b(patients?|diseases?|illness|conditions?|symptoms?|skin|cancer|disorders?)\b",
-        r"\bsymptom[- ]?checker\b",
-        r"\b(prescri(be|ption)s?|dosage|medication advice)\b",
-        r"\b(therapy|therapist|counsell?ing) (bot|chatbot|app|ai|sessions?)\b",
-        r"\b(ai|virtual|online) (therapist|doctor|nurse|psychologist|psychiatrist)\b",
-        r"\btreat(s|ing|ment (plans?|advice))?\b.{0,30}\b(depression|anxiety|diabetes|cancer|adhd|insomnia|disease|illness)\b",
-        r"\b(diet|meal|nutrition) plans? for (diabetes|diabetics|cancer|weight loss|pcos|patients|kidney)\b",
-        r"\b(supplements?|herbal remed(y|ies))\b",
-        r"\bhealth advice\b",
-    ),
-    "legal_advice": (
-        r"\blegal (advice|advisor|adviser|counsel|opinions?)\b",
-        r"\b(answers?|gives?|provides?|offers?)\b.{0,30}\blegal (questions|help|guidance)\b",
-        r"\b(ai|robot|virtual|online) (lawyer|attorney|solicitor|paralegal)\b",
-        r"\blawyer (bot|chatbot|ai)\b",
-        r"\b(draft|drafts|drafting|write|writes|generate|generates)\b.{0,20}\b(contracts?|wills?|leases?|ndas?|legal documents?)\b",
-        r"\bcontract review\b",
-        r"\b(visa|immigration|tax|divorce|custody|tenant) (advice|lawyer|law help)\b",
-    ),
+# "strong": the phrase names the banned product itself. "ambiguous": the word also appears in
+# allowed ideas (software for a bakery, a book-lending tracker), so the model must confirm.
+CATEGORY_PATTERNS: dict[str, dict[str, tuple[str, ...]]] = {
+    "physical_goods": {
+        "strong": (
+            r"\bphysical (products?|goods|items?|copies|books?)\b",
+            r"\bdrop[- ]?shipping\b",
+            r"\bprint[- ]on[- ]demand\b",
+            r"\bsubscription box(es)?\b",
+            # The founder sells goods ("we sell", "sells our ..."); "shops that sell handmade jewelry" is
+            # only ambiguous, since software for those shops is allowed.
+            r"\b((we|i|to) sell(ing)?|sell(s|ing)? (our|my)) (\w+ )?(handmade|hand-made|clothes|shoes|food|coffee beans|snacks|baked goods|cakes|plants|hardware|gadgets|furniture|jewel(le)?ry|candles|cosmetics|wallets|bags)\b",
+            r"\bship(s|ping)? (products|orders|boxes|parcels|goods) to\b",
+        ),
+        "ambiguous": (
+            r"\b(t[- ]?shirts?|hoodies|mugs|merch(andise)?|apparel|clothing line)\b",
+            r"\bhand[- ]?made\b",
+            r"\b(candles|jewel(le)?ry|cosmetics|skincare products|soaps?|furniture|sneakers)\b",
+            r"\b3d[- ]printed\b",
+            r"\b(bakery|food truck|restaurant|caf[eé])\b",
+            r"\bphysical (stores?|shops?)\b",
+        ),
+    },
+    "financial_investment_crypto": {
+        "strong": (
+            r"\btoken (sale|launch|offering)\b",
+            r"\b(stock|share|options?) (picks|tips|signals|trading)\b",
+            r"\btrading (bot|signals?|platform|algorithm|course)\b",
+            r"\b(forex|fx trading|day[- ]trading)\b",
+            r"\binvest(ment|ing)? (advice|advisor|adviser|platform|app|fund|portfolio|tips|club)\b",
+            r"\brobo[- ]?advis[oe]r\b",
+            r"\b(micro[- ]?loans?|micro[- ]?finance|payday loans?|credit line|bnpl|buy now,? pay later)\b",
+            r"\binsurance (product|policy|policies|app|platform)\b",
+            r"\b(payment processor|money transfer|remittance|e[- ]?wallet|digital wallet|neobank)\b",
+            r"\bfinancial advice\b",
+            r"\bbuy (fractions of )?(bitcoin|ethereum|crypto|shares|stocks)\b",
+        ),
+        "ambiguous": (
+            r"\bcrypto(currency|currencies)?\b",
+            r"\b(bitcoin|ethereum|blockchain|defi|web3|nfts?|stablecoins?)\b",
+            r"\b(loans?|lending)\b",
+        ),
+    },
+    "health_advice": {
+        "strong": (
+            r"\bmedical (advice|diagnos\w*|second opinion)\b",
+            r"\bdiagnos(e|es|is|ing|tic)\b.{0,40}\b(patients?|diseases?|illness|conditions?|symptoms?|skin|cancer|disorders?)\b",
+            r"\bsymptom[- ]?checker\b",
+            r"\b(reads?|checks?|analy[sz]es?) (your |their )?symptoms\b",
+            r"\b(prescri(be|bes|bing|ption)s?|dosage|medication advice)\b",
+            r"\bwhich (medicine|medication|pill|drug)s? to take\b",
+            r"\b(therapy|therapist|counsell?ing) (bot|chatbot|ai)\b",
+            r"\b(ai|virtual|online|robot) (therapist|doctor|nurse|psychologist|psychiatrist)\b",
+            r"\btreat(s|ing|ment (plans?|advice))?\b.{0,30}\b(depression|anxiety|diabetes|cancer|adhd|insomnia|disease|illness)\b",
+            r"\b(diet|meal|nutrition) plans? for (diabetes|diabetics|cancer|pcos|patients|kidney)\b",
+            r"\bhealth advice\b",
+        ),
+        "ambiguous": (
+            r"\b(supplements?|herbal remed(y|ies)|vitamins?)\b",
+            r"\btherapy (app|sessions?)\b",
+            r"\bweight[- ]loss (plans?|programs?|coaching)\b",
+        ),
+    },
+    "legal_advice": {
+        "strong": (
+            r"\blegal (advice|advisor|adviser|counsel|opinions?)\b",
+            r"\b(answers?|gives?|provides?|offers?)\b.{0,30}\blegal (questions|help|guidance)\b",
+            r"\b(ai|robot|virtual|online) (lawyer|attorney|solicitor|paralegal)\b",
+            r"\blawyer (bot|chatbot|ai)\b",
+            r"\bcontract review\b",
+            r"\b(visa|immigration|tax|divorce|custody|tenant) (advice|lawyer|law help)\b",
+        ),
+        "ambiguous": (
+            r"\b(draft|drafts|drafting|write|writes|generate|generates)\b.{0,20}\b(contracts?|wills?|leases?|ndas?|legal documents?)\b",
+        ),
+    },
 }
 
-_CATEGORY_RE = {cat: [re.compile(p, _FLAGS) for p in pats] for cat, pats in CATEGORY_PATTERNS.items()}
-
-# Fields of the brief that describe the product. Skills, budget and the rest are about the
-# founder, not the product, so they never trigger a ban (a lawyer may build an HR tool).
-_PRODUCT_FIELDS = ("idea", "product", "description", "product_description", "subdomain")
+_CATEGORY_RE = {
+    cat: {kind: [re.compile(p, _FLAGS) for p in pats] for kind, pats in kinds.items()}
+    for cat, kinds in CATEGORY_PATTERNS.items()
+}
 
 _MODEL_PROMPT = """You classify a startup idea for a safety check. Reply with JSON only, no other text.
 
@@ -135,25 +209,49 @@ Banned categories:
 - legal_advice: the product gives legal advice or drafts legal documents for people.
 
 Software that serves a business in one of these fields without doing the banned thing itself (for example
-scheduling software for clinics, or a CRM for law firms) is "allowed".
+scheduling software for clinics, a booking widget for restaurants, or a CRM for law firms) is "allowed".
 
-Idea: {idea}
+Founder brief (all fields):
+{brief}
 
 Reply exactly: {{"category": "allowed" | "physical_goods" | "financial_investment_crypto" | "health_advice" | "legal_advice", "reason": "<one sentence>"}}"""
 
 
-def _product_text(brief: Mapping[str, Any]) -> str:
-    return "\n".join(str(brief.get(f, "")) for f in _PRODUCT_FIELDS if brief.get(f))
+class CategoryHit(NamedTuple):
+    category: str
+    matched: str
+    strong: bool
 
 
-def _rule_category(text: str) -> Optional[tuple[str, str]]:
-    """Return (category, matched text) for the first banned-category rule that fires, else None."""
-    for category, regexes in _CATEGORY_RE.items():
-        for rx in regexes:
-            for m in rx.finditer(text):
-                if not _negated(text, m.start()):
-                    return category, m.group(0)
-    return None
+def _flatten(value: Any) -> Iterable[str]:
+    if value is None or isinstance(value, bool):
+        return
+    if isinstance(value, Mapping):
+        for v in value.values():
+            yield from _flatten(v)
+    elif isinstance(value, (list, tuple, set)):
+        for v in value:
+            yield from _flatten(v)
+    else:
+        text = str(value).strip()
+        if text:
+            yield text
+
+
+def brief_text(brief: Mapping[str, Any]) -> str:
+    """Every field of the brief joined into one text (idea, target_market, values, skills ...)."""
+    return "\n".join(_flatten(brief))
+
+
+def _category_hits(text: str) -> list[CategoryHit]:
+    hits = []
+    for category, kinds in _CATEGORY_RE.items():
+        for kind, regexes in kinds.items():
+            for rx in regexes:
+                for m in rx.finditer(text):
+                    if not _negated(text, m.start()):
+                        hits.append(CategoryHit(category, m.group(0), kind == "strong"))
+    return hits
 
 
 def _parse_json(content: Any) -> dict[str, Any]:
@@ -166,12 +264,12 @@ def _parse_json(content: Any) -> dict[str, Any]:
     return json.loads(match.group(0))
 
 
-def _model_category(idea: str, llm: Any, log_path: Optional[Path]) -> tuple[str, str]:
+def _model_category(text: str, llm: Any, log_path: Optional[Path]) -> tuple[str, str]:
     """Ask the fast model for a category. Returns (category, reason); logs the call."""
     from llm import usage_cost
     from logger import log_action
 
-    reply = llm.invoke(_MODEL_PROMPT.format(idea=idea[:2000]))
+    reply = llm.invoke(_MODEL_PROMPT.format(brief=text[:3000]))
     tokens, cost = usage_cost(reply)
     data = _parse_json(getattr(reply, "content", reply))
     category = str(data.get("category", "")).strip().lower()
@@ -192,6 +290,20 @@ def _model_category(idea: str, llm: Any, log_path: Optional[Path]) -> tuple[str,
     return category, reason
 
 
+def _ask_model(text: str, use_model: bool, llm: Any, log_path: Optional[Path]) -> tuple[Optional[str], str]:
+    """(category, reason) from the model, or (None, why it did not run)."""
+    if not use_model:
+        return None, "the model check was not run (keyword rules only)"
+    try:
+        if llm is None:
+            from llm import get_llm
+
+            llm = get_llm(role="fast")
+        return _model_category(text, llm, log_path)
+    except Exception as exc:  # model down or bad reply
+        return None, f"the model check could not run ({type(exc).__name__})"
+
+
 def check_category(
     brief: Mapping[str, Any],
     *,
@@ -204,33 +316,38 @@ def check_category(
     Returns (allowed, category, reason). category is one of
     schemas.BANNED_CATEGORIES when the idea is banned, otherwise "allowed".
 
-    use_model=False runs the keyword rules only (tests, evals, offline use).
+    use_model=False runs the keyword rules only (tests, evals, offline use); an
+    ambiguous keyword is then blocked to be safe.
     llm lets callers pass a model; by default it is get_llm(role="fast").
     """
     if not isinstance(brief, Mapping) or not str(brief.get("idea", "")).strip():
         raise ValueError("brief must be a mapping with a non-empty 'idea'")
-    text = _product_text(brief)
+    text = brief_text(brief)
+    hits = _category_hits(text)
 
-    hit = _rule_category(text)
-    if hit:
-        category, matched = hit
-        return False, category, f"{CATEGORY_REASONS[category]} (Rule matched: \"{matched}\".)"
+    strong = [h for h in hits if h.strong]
+    if strong:
+        h = strong[0]
+        return False, h.category, f"{CATEGORY_REASONS[h.category]} (Rule matched: \"{h.matched}\".)"
 
-    if not use_model:
-        return True, ALLOWED, "No banned-category rule matched (keyword rules only; model check not run)."
-
-    try:
-        if llm is None:
-            from llm import get_llm
-
-            llm = get_llm(role="fast")
-        category, model_reason = _model_category(text, llm, log_path)
-    except Exception as exc:  # model down or bad reply: the rules result stands, and we say so
+    if hits:  # only ambiguous words: the model must confirm
+        h = hits[0]
+        category, model_reason = _ask_model(text, use_model, llm, log_path)
+        if category is None:
+            return False, h.category, (
+                f"{CATEGORY_REASONS[h.category]} The word \"{h.matched}\" may mean this category, and "
+                f"{model_reason}, so the idea is blocked to be safe. Rephrase the idea, or rerun with the model check."
+            )
+        if category in BANNED_CATEGORIES:
+            return False, category, f"{CATEGORY_REASONS[category]} The model confirmed the ambiguous word \"{h.matched}\": {model_reason}"
         return True, ALLOWED, (
-            "No banned-category rule matched. The model check could not run "
-            f"({type(exc).__name__}), so this rests on keyword rules only."
+            f"The word \"{h.matched}\" can point to a banned category, but the model check judged this an "
+            f"allowed digital product: {model_reason}"
         )
 
+    category, model_reason = _ask_model(text, use_model, llm, log_path)
+    if category is None:
+        return True, ALLOWED, f"No banned-category rule matched; {model_reason}, so this rests on keyword rules only."
     if category in BANNED_CATEGORIES:
         detail = f" Model's reason: {model_reason}" if model_reason else ""
         return False, category, f"{CATEGORY_REASONS[category]}{detail}"
@@ -260,6 +377,15 @@ TEXT_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(bots?|fake accounts?)\b.{0,20}\b(sign[- ]?ups?|reviews?|likes|followers)\b",
         r"\bmake up\b.{0,20}\b(names?|quotes?|reviews?|testimonials?|numbers|stats|statistics|figures|sign[- ]?ups?|customers?)\b",
         r"\b(add|write|generate|create|invent)\b.{0,30}\b(customer|user|client|buyer) (quotes?|praise|success stories)\b",
+        # French
+        r"\b(faux|fausses?|bidons?|invent[ée]e?s?)\s+(avis|t[ée]moignages?|commentaires?|notes?|inscriptions?|abonn[ée]s)\b",
+        r"\b(avis|t[ée]moignages?|commentaires?)\s+(faux|fausses?|bidons?|invent[ée]e?s?)\b",
+        r"\b([ée]cris|[ée]crire|r[ée]dige[rz]?|g[ée]n[èée]re[rz]?|cr[ée]e[rz]?|invente[rz]?|publie[rz]?)\b.{0,30}\b(avis|t[ée]moignages?)\b",
+        r"\bcinq [ée]toiles\b",
+        # Arabic
+        r"(تقييمات?|مراجعات?|تعليقات?|شهادات?|آراء)\s*(مزيفة|مزيف|وهمية|وهمي|مفبركة|مفبرك|كاذبة|كاذب)",
+        r"(اكتب|أكتب|اكتبي|اعمل|أنشئ|انشر|ولد|ولّد|زيف|فبرك)\s.{0,30}(تقييمات?|مراجعات?|شهادات?|آراء)",
+        r"خمس(ة)?\s*نجوم",
     ),
     "fake_urgency": (
         r"\bcount[- ]?down( timer| clock)?\b",
@@ -279,10 +405,17 @@ TEXT_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(in my name|under my name|sign(ed)? (it )?with my name)\b",
         r"\b(official|authori[sz]ed) (partner|reseller|account|page)\b.{0,30}\b(of|for|from)\b",
         r"\b(use|copy|borrow)\b.{0,20}\b(their|competitor'?s?|another (brand|company)'?s?|apple'?s?|google'?s?|amazon'?s?|microsoft'?s?)\b.{0,10}\b(logo|brand( name)?|trademark|branding)\b",
+        # French
+        r"\b(fais[- ]toi passer|faites[- ]vous passer|se faire passer|faire semblant d'[êe]tre|usurpe[rz]?)\b",
+        r"\b(en mon nom|[àa] ma place|comme si (tu [ée]tais|c'[ée]tait) moi)\b",
+        # Arabic
+        r"(انتحل|تنتحل|انتحال|تقمص)",
+        r"(تظاهر|اتظاهر|تتظاهر|اتنكر)\s*(بأنك|بانك|أنك|انك|إنك|إن|كأنك)",
+        r"(باسمي|بإسمي|نيابة عني|نيابةً عني|كأنك أنا|كأنني أنا|على أنك أنا|بصفتي)",
     ),
     "income_promise": (
         r"\bguarantee(d|s)?\b.{0,30}\b(income|profits?|returns?|results|success|sales|revenue|customers|earnings|money)\b",
-        r"\b(you|you'll|you will|founders?) (will|can|could)?\s*(make|earn|generate)\b.{0,20}\$\s?\d",
+        r"\b(you|you'll|you will|founders?|buyers?|customers?|they) (will|can|could)?\s*(make|earn|generate)\b.{0,20}\$\s?\d",
         r"\b(make|earn)\s+\$\s?\d[\d,.]*\s*[km]?\s*(per|a|an|/|every)\s*(day|week|month|year|hour)\b",
         r"\bpassive income\b",
         r"\bget rich\b",
@@ -291,6 +424,18 @@ TEXT_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(financial freedom|replace your (salary|income)|quit your (day )?job)\b",
         r"\bwill (generate|earn|make|bring in|reach)\b.{0,30}(\$\s?\d|\d[\d,.]*\s*(k|m)?\s*(in )?(revenue|mrr|arr|profit))",
         r"\b(guaranteed|certain|assured) to (succeed|work|sell|make money)\b",
+        # French
+        r"\b(revenus?|gains?|profits?|b[ée]n[ée]fices?)\s+(garantis?|assur[ée]s?|s[ûu]rs?)\b",
+        r"\bgaranti(e|es|s|t|ssons)?\b.{0,30}\b(revenus?|gains?|succ[èe]s|ventes|profits?|b[ée]n[ée]fices?)\b",
+        r"\brevenus? passifs?\b",
+        r"\b(tu vas|vous allez|vous allez) (gagner|toucher|empocher)\b",
+        r"\bdevenir riche\b",
+        # Arabic
+        r"(دخل|ربح|أرباح|ارباح|عائد|مكسب)\s*(مضمون|مضمونة|مؤكد|مؤكدة|ثابت)",
+        r"(نضمن|يضمن|تضمن|ضمان|مضمون)\s.{0,20}(دخل|ربح|أرباح|ارباح|نجاح|مبيعات|فلوس)",
+        r"(ستربح|هتكسب|ستكسب|هتربح|هتعمل فلوس)",
+        r"دخل\s*سلبي",
+        r"الثراء\s*السريع",
     ),
     "money_handling": (
         r"\b(transfer|wire|withdraw|move|send|hold|escrow|disburse|pay out)\w*\b.{0,30}\b(money|funds|cash|balance|deposits?|payouts?|\$\s?\d[\d,.]*)\b",
@@ -318,23 +463,10 @@ TEXT_PATTERNS: dict[str, tuple[str, ...]] = {
 
 _TEXT_RE = {rule: [re.compile(p, _FLAGS) for p in pats] for rule, pats in TEXT_PATTERNS.items()}
 
-# Rules where "never", "no", "not" ... earlier in the same sentence cancels the match.
 # Credentials are not negatable: a secret in the text is a leak whatever surrounds it.
 _NEGATABLE = set(TEXT_RULES) - {"credentials"}
 
-_NEGATION_RE = re.compile(
-    r"\b(no|not|never|without|avoid|avoids|refuse|refuses|cannot|can't|won't|don't|doesn't|"
-    r"isn't|aren't|mustn't|shouldn't|nor|instead of|rather than|prohibited|banned|forbidden)\b",
-    _FLAGS,
-)
 _CARD_RE = re.compile(r"(?<![\d-])(?:\d[ -]?){12,18}\d(?![\d-])")
-
-
-def _negated(text: str, start: int) -> bool:
-    """True when a negation word appears earlier in the same sentence, within 60 characters."""
-    window = text[max(0, start - 60) : start]
-    window = re.split(r"[.!?\n;:]", window)[-1]
-    return bool(_NEGATION_RE.search(window))
 
 
 def _luhn_ok(digits: str) -> bool:
@@ -367,6 +499,7 @@ def check_text(text: str) -> list[Violation]:
     """
     if not isinstance(text, str):
         raise TypeError("check_text needs a string")
+    text = text.replace("’", "'").replace("‘", "'")  # curly apostrophes
     found: list[Violation] = []
     seen: set[tuple[str, str]] = set()
 
@@ -395,6 +528,7 @@ def check_text(text: str) -> list[Violation]:
 __all__ = [
     "check_category",
     "check_text",
+    "brief_text",
     "TEXT_RULES",
     "ALLOWED",
     "BANNED_CATEGORIES",
