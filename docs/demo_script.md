@@ -2,7 +2,19 @@
 
 Two scripts for the founder web app at `http://localhost:8000`: **A**, the 3-minute live demo, and **B**, the weak-idea run that ends in STOP. We follow them at 21:00 (the recorded demo runs) and for the video at 22:30.
 
-The briefs come from `evals/briefs/briefs.json`. Their Gate 1 results on Groq are in `evals/briefs/results.md`. On the local model the scores can differ, so **say what the screen shows, never what this script expects.** If a gate recommends something other than what is written here, read out the real recommendation and its reasons. That honesty is part of the demo.
+The briefs come from `evals/briefs/briefs.json`. Their Gate 1 results on Groq are in `evals/briefs/RESULTS.md`. On the local model the scores can differ, so **say what the screen shows, never what this script expects.** If a gate recommends something other than what is written here, read out the real recommendation and its reasons. That honesty is part of the demo.
+
+## Which gates the demo shows
+
+All six phases are wired into the run, each ending at its own founder gate, but a full run takes
+about a minute of machine time on Groq (20,915 tokens; `evals/briefs/RESULTS.md`) and longer on a
+local model. So the live demo shows only **Gate 1**: the decision judges care about most (a STOP with
+reasons) and the founder approval step. The app's **"stop the demo after Phase N"** setting is set to
+**1** for the live demo, so choosing GO at the niche gate cannot start Phases 2 to 6 on stage.
+
+The later gates (2: waitlist, 3: build plan and the real build of the landing page, product and docs,
+4: commercial, 5: launch and the MOCKED sale to cash, 6: memo) are shown, if at all, from an earlier
+run opened by its id, not run live.
 
 ## Before you start (10 minutes earlier)
 
@@ -77,7 +89,7 @@ On Groq this brief got **STOP** (score 1.75 in the eval, 1.15 in a later app run
 - Say "scored against our rubric", never "validated".
 - Say "we rate every source and show the rating", never "we only use credible sources".
 - Never promise income or success, and never call a STUBBED or MOCKED part real.
-- Phases 2–6 are drafts that are not wired into the run yet: say so if asked.
+- Phases 2–6 run after the niche gate, each with its own founder gate, but their outputs are labelled STUBBED drafts and the sale to cash is MOCKED: say so if asked.
 
 ## After the recorded runs (21:00)
 
