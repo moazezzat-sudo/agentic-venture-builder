@@ -14,7 +14,7 @@ Criteria:
 - `rules_risk`: allowed category, regulation, ethics. Score 0 if it is a physical product, a financial, investment or crypto product, or health or legal advice.
 
 Rules:
-- Missing evidence lowers the score. Never fill a gap with your own belief.
+- Missing evidence lowers the score. Never fill a gap with your own belief or general knowledge: with no claim about competitors, say "no evidence", not that tools "likely" exist.
 - Founder statements are claims, not facts. Use the skeptic's checks when given.
 - No praise. No predictions of income or success. Never invent numbers.
 - Each reason is one sentence under 160 characters and names the claim numbers it relies on, like "[2][5]", or says "no evidence".
