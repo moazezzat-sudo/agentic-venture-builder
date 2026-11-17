@@ -96,7 +96,11 @@ def test_anything_but_a_founder_decision_leaves_the_run_paused(run):
 
 def test_every_logged_approval_is_by_the_founder(run):
     r = orchestrator.start_run(dict(FULL_BRIEF), "approval-3")
-    orchestrator.resume_run("approval-3", record_decision("approval-3", r, approved=True, outcome="stop"))
+    # Approving keeps the recommendation; to choose stop instead of go the founder rejects it.
+    with pytest.raises(ValueError):
+        orchestrator.resume_run("approval-3", record_decision("approval-3", r, approved=True, outcome="stop"))
+    assert orchestrator.pending("approval-3") is not None  # still paused
+    orchestrator.resume_run("approval-3", record_decision("approval-3", r, approved=False, outcome="stop"))
     for entry in _log(run):
         assert entry["approved_by"] in (None, "founder")
         if entry["action"].endswith("founder_decision"):
