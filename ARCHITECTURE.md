@@ -66,6 +66,28 @@ flowchart TD
 
 **Prompts:** one file per agent in [`prompts/`](prompts/). They are skeptical by design: no praise, no income promises, no invented numbers, JSON replies only.
 
+**Discovery conversation** ([`agents/discovery.py`](agents/discovery.py), [`agents/questions.py`](agents/questions.py)). Before any research, the system restates the idea plainly and lists one assumption for each type: customer, problem, current alternative, why now, and payment (`discovery_summary`). It also extracts the search keywords. It then asks 3–5 questions (`discovery_questions`):
+- They target what is vague or missing, and the riskiest assumptions.
+- They follow The Mom Test: about past behaviour, never "would you use it". Hypothetical questions and questions that break a guardrail are dropped in Python.
+- Each has a reason and 2–3 answers the founder can click.
+
+The founder confirms or corrects the understanding before research starts. If the model fails, fixed questions are used. After repeat or pivot, `coach_questions` asks about the missing evidence types for the lowest-scoring criteria. All calls are small (JSON mode, temperature 0, one example per prompt), and every text passes `guardrails.check_text`.
+
+**Search plan by evidence type** ([`agents/search_plan.py`](agents/search_plan.py), [`agents/researcher.py`](agents/researcher.py)). The confirmed keywords become queries for each evidence type: pain, competitors, pricing, market and regulation. One researcher runs per type. Every claim it keeps carries an id (C1, C2 …) and its type, so later steps can cite it.
+
+**Evidence-cited evaluation memo** ([`agents/evaluation_memo.py`](agents/evaluation_memo.py), called at every gate by `orchestrator.build_memo`). Python supplies the facts: the verdict and rules from `gates.py`, the scores, and the claims with ids. The model only writes the explanation. Python then validates it:
+- every claim id must exist;
+- in text without a valid id, sentences with numbers are removed and the rest is marked `ASSUMPTION`;
+- guardrail hits are removed.
+
+The scores always come from Python. Next steps are built in Python from the verdict:
+- go: test the riskiest assumption first;
+- repeat: exactly which evidence to gather and how, with the Mom Test kit;
+- pivot: two directions backed by cited claims;
+- stop: why, and what new evidence would change it.
+
+If the model fails, a template memo is built from the gate's reasons and the cited claims. At Gate 1 it writes `phase1_step5_evaluation.md`, with citations like [C3] and a sources list.
+
 ### Phase 2: Validate
 
 **Core step: design the business.** [`agents/phase2_lean_canvas.py`](agents/phase2_lean_canvas.py) drafts a Lean Canvas: problem, segments, unique value proposition, solution, channels, revenue, costs, key metrics and unfair advantage. It also drafts unit economics from the founder's own inputs, the riskiest assumption, and landing-page copy for a waitlist test.
