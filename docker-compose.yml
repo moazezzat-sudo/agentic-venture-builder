@@ -14,7 +14,10 @@ services:
       timeout: 5s
       retries: 30
 
-  # Downloads the open-weight model(s) once (kept in the ollama_data volume).
+  # Downloads the open-weight model(s) once (kept in the ollama_data volume), in the
+  # background: the app does not wait for it. Choose the model with OLLAMA_MODEL in .env
+  # (default qwen3:8b, about 5 GB; qwen3:4b is about half for slow connections).
+  # Progress: docker compose logs -f model-pull
   model-pull:
     image: ollama/ollama:latest
     depends_on:
@@ -50,9 +53,14 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
+    # The app starts as soon as the ollama container has started; it never waits for the
+    # model download. model-pull keeps downloading in the background and the app shows
+    # "Local model still downloading" until the model is there (a Groq key works at once).
+    # required: false lets the app start even when the ollama service is stopped or fails.
     depends_on:
-      model-pull:
-        condition: service_completed_successfully
+      ollama:
+        condition: service_started
+        required: false
     # The founder web app on http://localhost:8000
     command: streamlit run app.py --server.port 8000 --server.address 0.0.0.0
 
