@@ -440,6 +440,44 @@ def test_get_state_is_read_only_and_public(run):
     assert orchestrator.get_state("public")["pending"] == state["pending"]  # reading twice changes nothing
 
 
+class TimeoutOnce(FakeModel):
+    """Raises a timeout on the first call to one agent, like a slow local model."""
+
+    def __init__(self, agent):
+        super().__init__()
+        self.fail_agent, self.failed = agent, False
+
+    def __call__(self, agent, *args, **kwargs):
+        if agent == self.fail_agent and not self.failed:
+            self.failed = True
+            raise TimeoutError("model timed out")
+        return super().__call__(agent, *args, **kwargs)
+
+
+def test_retry_run_reruns_only_the_failed_step(run, monkeypatch):
+    model = TimeoutOnce("scorer")
+    monkeypatch.setattr(common, "invoke_model", model)
+    with pytest.raises(TimeoutError):
+        orchestrator.start_run(FULL_BRIEF, "retry-me")
+    failed = orchestrator.failed_step("retry-me")
+    assert failed["node"] == "scorer" and "timed out" in failed["error"]
+    before = list(model.calls)
+
+    r = orchestrator.retry_run("retry-me")
+    assert r["awaiting_founder"] and r["kind"] == "gate" and r["recommendation"] == "go"
+    assert model.calls[len(before):] == ["scorer"]  # weigher, researchers and skeptic are not run again
+    assert orchestrator.failed_step("retry-me") is None
+    assert any(e["action"] == "retry_run" and e["node"] == "scorer" for e in log_entries(run))
+
+
+def test_retry_run_refuses_runs_that_did_not_fail(run):
+    with pytest.raises(ValueError):
+        orchestrator.retry_run("never-started")
+    orchestrator.start_run(FULL_BRIEF, "paused")
+    with pytest.raises(ValueError):
+        orchestrator.retry_run("paused")  # waiting for the founder: resume_run, not retry
+
+
 def test_model_cannot_invent_sources(run, monkeypatch):
     monkeypatch.setattr(tools.worldbank, "indicator", no_indicator)  # no tier A/B market source in this run
     orchestrator.start_run(FULL_BRIEF, "sources")

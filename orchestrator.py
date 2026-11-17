@@ -6,6 +6,7 @@ Public interface (PLAN.md section 11, "Shared interfaces"):
     result = start_run(brief, run_id)          # runs until the first pause
     result = resume_run(run_id, reply)         # continues after the founder answers
     state = get_state(run_id)                  # read-only: the run's saved state, or None
+    result = retry_run(run_id)                 # after an error (e.g. model timeout): re-run the failed step
 
 Both return a dict. Check result["awaiting_founder"]:
   - False: the run has ended (stopped, or Phase 1 is finished). The dict is the
@@ -383,6 +384,36 @@ def get_state(run_id: str) -> Optional[dict[str, Any]]:
     return {**snap.values, "run_id": run_id, "awaiting_founder": waiting is not None, "pending": waiting}
 
 
+def failed_step(run_id: str) -> Optional[dict[str, Any]]:
+    """The step a run stopped on because of an error (for example a model timeout), or None.
+
+    {"node": name, "error": text}. A run paused for the founder, or finished, has no failed step.
+    """
+    snap = get_graph().get_state(_config(_check_run_id(run_id)))
+    if not snap.values or not snap.next or snap.interrupts:
+        return None
+    errored = [t for t in snap.tasks if getattr(t, "error", None)]
+    task = errored[0] if errored else snap.tasks[0] if snap.tasks else None
+    return {"node": task.name if task else snap.next[0], "error": str(getattr(task, "error", "") or "")}
+
+
+def retry_run(run_id: str) -> dict[str, Any]:
+    """Re-run the step that failed (for example after a model timeout) from the last checkpoint.
+
+    Steps that already finished are not run again; parallel researchers that finished keep
+    their results. Raises ValueError when the run has not failed: a paused run continues with
+    resume_run, a finished one cannot continue. Returns the same dict as start_run.
+    """
+    run_id = _check_run_id(run_id)
+    failed = failed_step(run_id)
+    if failed is None:
+        raise ValueError(f"run {run_id!r} has no failed step to retry (paused runs continue with resume_run)")
+    log_action(agent="orchestrator", action="retry_run", model=None, run_id=run_id,
+               node=failed["node"], error=failed["error"][:200])
+    get_graph().invoke(None, _config(run_id))
+    return _result(run_id)
+
+
 def pending(run_id: str) -> Optional[dict[str, Any]]:
     """What the run is waiting for (the interrupt payload), or None if it is not paused."""
     snap = get_graph().get_state(_config(_check_run_id(run_id)))
@@ -436,4 +467,4 @@ def resume_run(run_id: str, decision: Union[FounderDecision, dict[str, Any]]) ->
     return _result(run_id)
 
 
-__all__ = ["start_run", "resume_run", "get_state", "pending", "build_graph", "get_graph", "set_graph", "stubbed_parts", "check_category"]
+__all__ = ["start_run", "resume_run", "retry_run", "failed_step", "get_state", "pending", "build_graph", "get_graph", "set_graph", "stubbed_parts", "check_category"]
