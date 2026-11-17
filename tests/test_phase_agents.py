@@ -226,3 +226,48 @@ def test_launch_post_posing_as_a_customer_is_flagged(env):
     env["use"](bad, bad)
     rules = {v["rule"] for v in phase5_launch.agent(dict(STATE))["text_violations"]}
     assert {"impersonation", "fake_social_proof"} <= rules
+
+
+# --------------------------------------------------------------------------- phase 3
+
+from agents import phase3_build_plan  # noqa: E402
+
+BUILD = {
+    "stack": [{"component": "Backend", "choice": "FastAPI", "why": "Founder knows Python"}],
+    "database": {"choice": "SQLite", "why": "Local, free"},
+    "flows": ["Recruiter shares a link; candidate picks a slot"],
+    "screens": [{"name": "Booking page", "purpose": "Candidate picks a slot"}],
+    "riskiest_assumption": {"text": "Recruiters will switch from email", "source": 0},
+    "mvp_features": ["Booking link", "Email reminder"],
+    "out_of_scope": ["Payments"],
+    "how_mvp_tests_it": "Five recruiters use it for a week",
+    "feasibility": [{"text": "About 60 hours of work fits 15 hours a week for 4 weeks", "source": None}],
+}
+
+
+def test_build_plan(env):
+    fake = env["use"](BUILD)
+    state = {**STATE, "scores": {"problem_evidence": 3, "market": 1, "founder_fit": 2},
+             "score_notes": {"market": "no tier A numbers"}}
+    draft = phase3_build_plan.agent(state)["drafts"]["phase3_build_plan"]
+    assert [w["criterion"] for w in draft["weakest_criteria"]] == ["market", "founder_fit"]
+    assert json.loads(fake.calls[0]["user"])["weakest_criteria"][0]["note"] == "no tier A numbers"
+    assert draft["database"]["local"] is True
+    assert draft["riskiest_assumption"][0]["support"] == "url" and draft["feasibility"][0]["support"] == "ASSUMPTION"
+    text = (env["out"] / "phase3_step1_build_plan.md").read_text(encoding="utf-8")
+    assert text.split("## Not built yet")[1].count("**STUBBED**") == 3
+    assert "not promises" in text and _unsupported_lines(env["out"]) == []
+
+
+def test_cloud_database_needs_the_founder(env):
+    env["use"]({**BUILD, "database": {"choice": "Firebase free tier", "why": "hosted"}})
+    draft = phase3_build_plan.agent(dict(STATE))["drafts"]["phase3_build_plan"]
+    assert draft["database"]["local"] is False
+    text = (env["out"] / "phase3_step1_build_plan.md").read_text(encoding="utf-8")
+    assert "founder creates any account" in text
+
+
+def test_empty_reply_defaults_to_a_local_database(env):
+    env["use"]("{}", "{}")
+    draft = phase3_build_plan.agent(dict(STATE))["drafts"]["phase3_build_plan"]
+    assert draft["database"] == {"choice": "SQLite (local file)", "why": "", "local": True}
