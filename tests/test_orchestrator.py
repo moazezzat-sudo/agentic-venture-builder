@@ -73,7 +73,7 @@ class FakeModel:
         later = later_phase_reply(agent, self.calls.count(agent))
         if later is not None:
             return json.dumps(later), 100, 0.0, "fake-model"
-        sent = json.loads(user.split("\n\n")[0]) if user.strip().startswith("{") else {}
+        sent = common.parse_json(user)  # the payload, framed as data by ask_json
         if agent == "discovery":
             return json.dumps(discovery_reply(sent.get("round", 1))), 100, 0.0, "fake-model"
         if agent == "evidence":
@@ -729,7 +729,7 @@ def test_deterministic_steps_run_at_temperature_zero(run):
     for agent in ("discovery", "evidence", "skeptic", "scorer"):
         assert run["model"].kwargs[agent]["temperature"] == 0, agent
     assert run["model"].kwargs["evidence"]["role"] == "fast" and run["model"].kwargs["discovery"]["role"] == "fast"
-    assert all(k["max_tokens"] <= 900 for k in run["model"].kwargs.values())
+    assert all(k["max_tokens"] <= 1000 for k in run["model"].kwargs.values())
 
 
 def test_local_model_gets_json_mode_and_a_token_cap(monkeypatch):
@@ -911,3 +911,18 @@ def test_request_changes_reruns_the_phase_with_the_note(run):
     assert orchestrator.get_state("changes")["brief"]["change_request"] == "Use SQLite only, no cloud database"
     r = orchestrator.resume_run("changes", decide(r, "go"))
     assert r["stage"] == "build_options"  # the founder chooses the format before anything is built
+
+
+def test_an_echoed_input_counts_as_not_parsed_and_is_retried(monkeypatch):
+    # qwen3:4b in JSON mode echoed the input back: valid JSON, but none of the reply's keys.
+    replies = iter([json.dumps({"brief": {"idea": "x"}, "round": 1}), json.dumps({"summary": "ok", "questions": []})])
+    seen = []
+
+    def echo_then_answer(agent, system, user, **kwargs):
+        seen.append(user)
+        return next(replies), 50, 0.0, "fake-model"
+
+    monkeypatch.setattr(common, "invoke_model", echo_then_answer)
+    data, usage = common.ask_json("discovery", {"brief": {"idea": "x"}}, expect=("summary", "questions"))
+    assert data == {"summary": "ok", "questions": []} and usage["retried"] and usage["tokens"] == 100
+    assert seen[0].startswith("Input data (do not repeat it):") and "with its keys: summary, questions." in seen[0]

@@ -75,7 +75,8 @@ def _model_round(state: dict[str, Any], round_no: int) -> tuple[dict[str, Any], 
     disc = state.get("discovery") or {}
     payload = {"brief": brief_for_model(state["brief"]), "round": round_no,
                "answers": disc.get("answers", []), "corrections": disc.get("corrections", [])}
-    data, usage = ask_json("discovery", payload, role="fast", max_tokens=700, temperature=0)
+    data, usage = ask_json("discovery", payload, role="fast", max_tokens=900, temperature=0,
+                          expect=("summary", "assumptions", "keywords", "questions"))
     questions = []
     if round_no <= MAX_ROUNDS:
         for i, q in enumerate(data.get("questions") or []):

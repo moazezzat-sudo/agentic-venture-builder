@@ -214,7 +214,7 @@ def research(area: dict[str, Any], brief: dict[str, Any], round_no: int) -> tupl
             "sources": [{k: s[k] for k in ("i", "tier", "title", "snippet")} | ({"forum": True} if s.get("forum") else {})
                         for s in sources],
         }
-        data, usage = ask_json("researcher", payload, role="fast", temperature=0)
+        data, usage = ask_json("researcher", payload, role="fast", temperature=0, expect=("claims",))
         claims = build_claims(data.get("claims"), sources, round_no)
     usage["web_search_ok"] = any(web)  # False: no web engine answered any of this area's searches
     return claims, usage, sources
@@ -321,7 +321,7 @@ def evidence_node(state: dict[str, Any]) -> dict[str, Any]:
                             "summary": cut(brief.get("discovery_summary") or brief.get("idea"), 300)},
                    "results": [{"i": i, "tier": c["tier"], "title": c["title"], "snippet": c["snippet"]}
                                for i, c in enumerate(candidates)]}
-        data, usage = ask_json("evidence", payload, role="fast", max_tokens=700, temperature=0)
+        data, usage = ask_json("evidence", payload, role="fast", max_tokens=900, temperature=0, expect=("results",))
         for r in data.get("results") or []:
             if isinstance(r, dict) and isinstance(r.get("i"), int) and not isinstance(r.get("i"), bool):
                 verdicts[r["i"]] = r

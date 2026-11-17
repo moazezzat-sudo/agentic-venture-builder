@@ -60,7 +60,7 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         "founder_note": decision.get("note", ""),
         "missing_evidence_types": missing_evidence_types(state),
     }
-    data, usage = ask_json("coach", payload, role="smart", max_tokens=700)
+    data, usage = ask_json("coach", payload, role="smart", max_tokens=700, expect=("revised_idea", "questions"))
     idea = state["brief"].get("idea", "")
     revised = cut(data.get("revised_idea") or idea, 400) if outcome == "pivot" else idea
     audience = state["brief"].get("target_market") or revised

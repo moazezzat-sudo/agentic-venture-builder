@@ -227,7 +227,7 @@ def make_node(step: int, name: str):
             "claims_by_type": grouped_claims(claims),
             "skeptic_checks": state.get("claim_checks") or [],
         }
-        data, usage = ask_json("scorer", payload, role="smart", max_tokens=900, temperature=0)
+        data, usage = ask_json("scorer", payload, role="smart", max_tokens=1000, temperature=0, expect=("criteria",))
         scores, notes, cited, incomplete = clean_scores(normalize_scores(data), claims, state)
 
         log_action(

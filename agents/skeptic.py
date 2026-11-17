@@ -60,7 +60,7 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         "brief": brief_for_model(state["brief"]),
         "claims": [{"i": i, "text": c["text"], "tier": c.get("tier"), "support": c.get("support")} for i, c in enumerate(claims)],
     }
-    data, usage = ask_json("skeptic", payload, role="smart", temperature=0)
+    data, usage = ask_json("skeptic", payload, role="smart", temperature=0, expect=("checks",))
     checks = clean_checks(data.get("checks"), claims, state["brief"])
 
     log_action(

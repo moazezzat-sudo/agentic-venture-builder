@@ -21,12 +21,14 @@ Rules:
 
 Reply with JSON only, with all six criteria:
 
+The example shows the shape only; write your own scores, ids and sentences for this idea:
+
 ```json
 {"criteria": {
-  "problem_evidence": {"score": 2, "claim_ids": ["C1", "C4"], "reasoning": "..."},
-  "market": {"score": 1, "claim_ids": ["C9"], "reasoning": "..."},
-  "competition": {"score": 2, "claim_ids": ["C5"], "reasoning": "..."},
-  "founder_fit": {"score": 3, "claim_ids": [], "reasoning": "..."},
-  "feasibility": {"score": 3, "claim_ids": [], "reasoning": "..."},
+  "problem_evidence": {"score": 2, "claim_ids": ["C1", "C4"], "reasoning": "Two forum threads describe the same pain; no source shows how often."},
+  "market": {"score": 1, "claim_ids": ["C9"], "reasoning": "Only country population; no figure for this customer group."},
+  "competition": {"score": 2, "claim_ids": ["C5"], "reasoning": "A paid app already does this; nothing here is clearly better yet."},
+  "founder_fit": {"score": 3, "claim_ids": [], "reasoning": "The founder's skills cover the build; no sales experience is stated."},
+  "feasibility": {"score": 3, "claim_ids": [], "reasoning": "A small first version fits the stated budget and hours."},
   "willingness_to_pay": {"score": 1, "claim_ids": [], "reasoning": "no evidence"}}}
 ```

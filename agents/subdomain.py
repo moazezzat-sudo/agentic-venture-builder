@@ -19,7 +19,8 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         "areas": [a["name"] for a in state.get("areas", [])],
         "claims": [{"text": c["text"], "tier": c.get("tier")} for c in strongest],
     }
-    data, usage = ask_json("subdomain", payload, role="smart", temperature=0)
+    data, usage = ask_json("subdomain", payload, role="smart", temperature=0,
+                           expect=("niche", "competitor_query", "interview_questions"))
     niche = cut(data.get("niche") or brief.get("target_market") or brief.get("idea"), 200)
     query = cut(data.get("competitor_query") or f"{niche} tools", 120)
     kit = write_interview_kit(data.get("interview_questions"), niche, "go")

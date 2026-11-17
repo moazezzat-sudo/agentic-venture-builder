@@ -54,6 +54,8 @@ def invoke_model(
 
     from llm import usage_cost
 
+    if user.lstrip().startswith("{"):
+        user = frame(user)  # small local models in JSON mode echo a bare JSON message back
     reply = _llm(role, max_tokens, temperature).invoke([SystemMessage(content=system), HumanMessage(content=user)])
     tokens, cost = usage_cost(reply)
     text = reply.content if isinstance(reply.content, str) else json.dumps(reply.content)
@@ -84,28 +86,41 @@ def parse_json(text: str) -> dict[str, Any]:
     return {}
 
 
+def frame(user_json: str, expect: Iterable[str] = ()) -> str:
+    """The payload framed as data, with the reply's keys named. qwen3:4b in JSON mode echoes a bare
+    JSON message back instead of answering it (seen in the real-model check)."""
+    keys = list(expect)
+    return ("Input data (do not repeat it):\n" + user_json + "\n\nReply with only the JSON object your instructions "
+            "describe" + (f", with its keys: {', '.join(keys)}." if keys else "."))
+
+
 def ask_json(
     agent: str, payload: dict[str, Any], role: str = "smart", max_tokens: int = DEFAULT_MAX_TOKENS,
-    temperature: Optional[float] = None,
+    temperature: Optional[float] = None, expect: Iterable[str] = (),
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Send the agent's prompt plus a compact JSON payload; return (parsed_reply, usage).
 
-    If the reply is not a JSON object, ask once more with a short "valid JSON only" note.
-    If that fails too, return {} with usage["parsed"] = False: every caller then uses its
-    safe default (no claims, a 0 score with the reason said, a fixed fallback query).
-    Tokens and cost cover both calls.
+    `expect` names the reply's top-level keys: a reply with none of them (for example the input
+    echoed back) counts as not parsed. If the reply is not a valid JSON object, ask once more with a
+    short "valid JSON only" note. If that fails too, return {} with usage["parsed"] = False: every
+    caller then uses its safe default. Tokens and cost cover both calls.
     """
+    expect = tuple(expect)
     system = load_prompt(agent)
-    user = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    user = frame(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), expect)
+
+    def valid(data: dict[str, Any]) -> dict[str, Any]:
+        return data if data and (not expect or any(k in data for k in expect)) else {}
+
     text, tokens, cost, model = invoke_model(agent, system, user, role=role, max_tokens=max_tokens, temperature=temperature)
-    data = parse_json(text)
+    data = valid(parse_json(text))
     retried = False
     if not data:
         retried = True
         text, t2, c2, model = invoke_model(agent, system, f"{user}\n\n{RETRY_NOTE}", role=role,
                                            max_tokens=max_tokens, temperature=temperature)
         tokens, cost = tokens + t2, cost + c2
-        data = parse_json(text)
+        data = valid(parse_json(text))
     return data, {"tokens": tokens, "cost": cost, "model": model, "parsed": bool(data), "retried": retried}
 
 

@@ -22,7 +22,8 @@ STOP = {"a", "an", "the", "and", "or", "for", "to", "of", "in", "on", "with", "t
         "them", "app", "apps", "web", "website", "platform", "tool", "tools", "online", "lets", "let", "allows",
         "helps", "people", "users", "using", "use", "via", "into", "from", "your", "our", "is", "are", "be", "can",
         "unclear", "not", "stated", "yet", "it", "this", "which", "would", "will", "get", "make", "have", "has",
-        "own", "there", "about", "when", "what"}
+        "own", "there", "about", "when", "what", "need", "needs", "but", "way", "easy", "easily", "they", "want",
+        "something", "currently", "today", "often", "really", "just", "more", "less", "also", "very"}
 ARABIC_COUNTRIES = {"EG", "SA", "AE", "JO", "MA", "TN"}
 GOV_DOMAIN = {"EG": "gov.eg", "SA": "gov.sa", "AE": "gov.ae", "JO": "gov.jo", "MA": "gov.ma", "TN": "gov.tn",
               "KE": "go.ke", "NG": "gov.ng", "ZA": "gov.za", "IN": "gov.in", "PK": "gov.pk", "ID": "go.id",
@@ -56,7 +57,9 @@ def country(brief: dict[str, Any]) -> tuple[str, str]:
 
 def keywords(brief: dict[str, Any]) -> dict[str, Any]:
     """Short keyword phrases from the confirmed brief."""
-    kw = dict(brief.get("keywords") or {})
+    # A keyword the model left as "unclear" or "not stated" is no keyword (seen with qwen3:4b).
+    kw = {k: v for k, v in (brief.get("keywords") or {}).items()
+          if k == "arabic" or not re.match(r"^\s*(unclear|unknown|not stated|n/?a|none)\b", str(v or ""), re.I)}
     understood = brief.get("confirmed_understanding") or {}
     clean = {k: re.sub(r"^\s*Unclear:\s*", "", str(v)) for k, v in understood.items()}
     place = brief.get("location") or ""
