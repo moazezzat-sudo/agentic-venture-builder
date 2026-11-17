@@ -1,0 +1,578 @@
+[
+  {
+    "timestamp": "2026-11-17T20:55:27Z",
+    "agent": "orchestrator",
+    "action": "start_run",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b"
+  },
+  {
+    "timestamp": "2026-11-17T20:55:30Z",
+    "agent": "guardrails",
+    "action": "category_check_model",
+    "sources": [],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "tokens": 471,
+    "outcome": "allowed"
+  },
+  {
+    "timestamp": "2026-11-17T20:55:30Z",
+    "agent": "guardrails",
+    "action": "category_check",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "allowed": true,
+    "category": "allowed",
+    "stubbed": false
+  },
+  {
+    "timestamp": "2026-11-17T20:55:31Z",
+    "agent": "discovery",
+    "action": "discovery_round_1",
+    "sources": [],
+    "model": "agents.questions",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "source": "agents.questions",
+    "questions": 4,
+    "unclear": [
+      "current_alternative",
+      "why_now",
+      "payment"
+    ],
+    "missing_fields": [],
+    "raw_reply": null,
+    "tokens": 0,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T20:55:31Z",
+    "agent": "discovery",
+    "action": "discovery_answers_round_1",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "answered": [],
+    "guardrail_violations": []
+  },
+  {
+    "timestamp": "2026-11-17T20:55:32Z",
+    "agent": "discovery",
+    "action": "discovery_round_2",
+    "sources": [],
+    "model": "agents.questions",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "source": "agents.questions",
+    "questions": 4,
+    "unclear": [
+      "current_alternative",
+      "why_now",
+      "payment"
+    ],
+    "missing_fields": [],
+    "raw_reply": null,
+    "tokens": 0,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T20:55:32Z",
+    "agent": "discovery",
+    "action": "discovery_answers_round_2",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "answered": [],
+    "guardrail_violations": []
+  },
+  {
+    "timestamp": "2026-11-17T20:55:32Z",
+    "agent": "discovery",
+    "action": "discovery_round_3",
+    "sources": [],
+    "model": "agents.questions",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "source": "agents.questions",
+    "questions": 0,
+    "unclear": [
+      "current_alternative",
+      "why_now",
+      "payment"
+    ],
+    "missing_fields": [],
+    "raw_reply": null,
+    "tokens": 0,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T20:55:32Z",
+    "agent": "discovery",
+    "action": "discovery_confirmed",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-weak-W1b",
+    "rounds": 3
+  },
+  {
+    "timestamp": "2026-11-17T20:55:33Z",
+    "agent": "guardrails",
+    "action": "category_check_model",
+    "sources": [],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "tokens": 540,
+    "outcome": "allowed"
+  },
+  {
+    "timestamp": "2026-11-17T20:55:33Z",
+    "agent": "guardrails",
+    "action": "category_check",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "allowed": true,
+    "category": "allowed",
+    "stubbed": false
+  },
+  {
+    "timestamp": "2026-11-17T20:55:33Z",
+    "agent": "search_plan",
+    "action": "build_search_plan",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "queries": 8,
+    "evidence_types": [
+      "competitors",
+      "market",
+      "pain",
+      "pricing",
+      "regulation"
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T20:55:33Z",
+    "agent": "researcher",
+    "action": "market_indicators",
+    "sources": [
+      "https://api.worldbank.org/v2/country/EG/indicator/SP.POP.TOTL?format=json&mrnev=1",
+      "https://api.worldbank.org/v2/country/EG/indicator/IT.NET.USER.ZS?format=json&mrnev=1"
+    ],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "market"
+  },
+  {
+    "timestamp": "2026-11-17T20:55:33Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "pricing",
+    "query": "website converter price Egypt",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://en.wikipedia.org/wiki/Rosetta_%28disambiguation%29",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://en.wikipedia.org/wiki/Oshkosh_M1070",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://en.wikipedia.org/wiki/Foreign_exchange_market",
+        "reason": "keyword score 0: shares no word with the query"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T20:55:33Z",
+    "agent": "researcher",
+    "action": "judge_relevance",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "pricing",
+    "candidates": 0,
+    "kept": 0,
+    "web_search_ok": false,
+    "tokens": 0,
+    "parsed": null,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T20:55:37Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "pain",
+    "query": "university students PDF Word conversion Egypt",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://en.wikipedia.org/wiki/Copts",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://en.wikipedia.org/wiki/Israel",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://en.wikipedia.org/wiki/Religious_conversion",
+        "reason": "the model judged it not relevant"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T20:55:37Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "pain",
+    "query": "PDF to Word conversion site:reddit.com",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://www.bing.com/aclick?ld=e8sVJAW1eAtx46yyrdU3nohzVUCUyNaRnRSpcB29wgtXIpXcS4h4A8o7_VxmnPr0ijxWn-RX4C19iQwUio4q2gvxrIS6zTCpWUN-OmJAuQdGURkwmpCzaA9PdjCEs8nfceRh3btV-FwCj8gPVv2yQ2s01ZpqCckGYSGiG3UvCqW7CCjA4dQXAUbh0kE0JjKUQiPRbqOFSlM8L1AW6-8-cBvrZOTdw&u=aHR0cHMlM2ElMmYlMmZwaXhlbC5ldmVyZXN0dGVjaC5uZXQlMmYzMDg1JTJmY3ElM2Zldl9zaWQlM2QxMCUyNmV2X2xuJTNkcGRmJTI1MjB0byUyNTIwd29yZCUyNTIwY29udmVyc2lvbiUyNmV2X2x0eCUzZCUyNmV2X2x4JTNka3dkLTc5NzgzODU0NTcxMTcyJTNhbG9jLTE4NyUyNmV2X2NyeCUzZDc5NzgzNDg4MzM1MzI2JTI2ZXZfbXQlM2RlJTI2ZXZfZHZjJTNkYyUyNmV2X3BoeSUzZDE1NDUyMiUyNmV2X2xvYyUzZCUyNmV2X2N4JTNkNDAyNDUyMzE2JTI2ZXZfYXglM2QxMjc2NTMzODEyNzYyMDk1JTI2ZXZfZXglM2QlMjZldl9lZmlkJTNkMGIwM2EyYTcxMTExMTQwNjgxYWNjODViYWUzMjI3NDElM2FHJTNhcyUyNnVybCUzZGh0dHBzJTI1M0ElMjUyRiUyNTJGYWNyb2JhdC5hZG9iZS5jb20lMjUyRnRvb2xzJTI1MkZwZGYtdG8td29yZCUyNTNGc2RpZCUyNTNESkNOQ1dGWEYlMjUyNm12JTI1M0RzZWFyY2glMjUyNm12MiUyNTNEcGFpZHNlYXJjaCUyNTI2ZWZfaWQlMjUzRDBiMDNhMmE3MTExMTE0MDY4MWFjYzg1YmFlMzIyNzQxJTI1M0FHJTI1M0FzJTI1MjZzX2t3Y2lkJTI1M0RBTCEzMDg1ITEwITc5NzgzNDg4MzM1MzI2ISEhITc5NzgzODU0NTcxMTcyISE0MDI0NTIzMTYhMTI3NjUzMzgxMjc2MjA5NSUyNTI2bXYlMjUzRHNlYXJjaCUyNm12JTNkc2VhcmNoJTI2bXYyJTNkcGFpZHNlYXJjaCUyNm1zY2xraWQlM2QwYjAzYTJhNzExMTExNDA2ODFhY2M4NWJhZTMyMjc0MQ&rlid=0b03a2a71111140681acc85bae322741",
+        "reason": "advert or redirect link"
+      },
+      {
+        "url": "https://www.bing.com/aclick?ld=e8QuS-TntTCkanHlPoLajS9DVUCUy5rNvRCQydxsqCXiht-ojuiAmvZAlbkXALovtYAIICH5kWE8pd8FVszVO2Z_0pAmSNnQE7MXxP5keLANNiYr-Aszab97ThT4lt-occqzdC17CPZgsb-gGbrcvPB7-lKRYBRN-AD9OanzCsaeioRYoUbuHeF9OxKyb7wmaTWrxmwapgu6_nsIe6Gx1ezrr9_w0&u=aHR0cHMlM2ElMmYlMmZjb252ZXJ0Mi5pbmZvJTJmdG9vbHMlMmZwZGYtdG8tZG9jeCUzZmNhbXBhaWduX2lkJTNkNTI1MTQwNzk4JTI2YWRncm91cF9pZCUzZDEzMjM4MTUwOTQ3OTgyMTglMjZwbGFjZW1lbnRfaWQlM2QlMjZjcmVhdGl2ZV9pZCUzZCUyNmtleXdvcmQlM2RBSSUyNTIwT3B0aW1pemVkJTI2a2V5d29yZF90eXBlJTNkYiUyNmFkX3Bvc2l0aW9uJTNkJTI2YWRfaXRlbSUzZCUyNnNvdXJjZSUzZGJpbmclMjZnY2xpZCUzZDIyMGNjYmIwNDkzYzEwZGZiMDllYTE0Y2Y2MWY1NzBmJTI2bXNjbGtpZCUzZDIyMGNjYmIwNDkzYzEwZGZiMDllYTE0Y2Y2MWY1NzBm&rlid=220ccbb0493c10dfb09ea14cf61f570f",
+        "reason": "advert or redirect link"
+      },
+      {
+        "url": "https://www.bing.com/aclick?ld=e8km_NIKGnf2lY6z153pEwLDVUCUzpMyfuo0RTQC8ja73QwOYX3uMdCwCkh6DXPoP4PaR2DFM4-r5ybGw1v1VZhT4Pq5iSdHVRjUZOfJe2HalG8D-XROLXWddEGVdOXH7H8bcxQ82N9kWEy8xZo3Cmgcpd60_M3ekZsuv7ra84KxcZrsoLKeBEvmMN1DIAN0Bbh_0B2g806fNhZ_9BbEtehCDvNQU&u=aHR0cHMlM2ElMmYlMmZ6ZW5kb2NzLmNvbSUyZnBkZi10by13b3JkJTNmaWQlM2Q3NDhmMzcwOGU0ZGRlNzIxMjcwYmNkMjdmNzgyYzM1N2NjN2FkYTQwZDg4YTU4ZmI2NGIyZGFkMWVjMjNhMWUzJTI2dXRtX3NvdXJjZSUzZGJpbmclMjZ1dG1fbWVkaXVtJTNkY3BjJTI2dXRtX2NhbXBhaWduJTNkQVJfQVJfUERGX0FsbF9TZXJ2aWNlcyUyNnV0bV9jYW1wYWlnbl9pZCUzZDUyNTE4NTE4NiUyNnV0bV9hZGdyb3VwJTNkQVJfRU5fUERGX1dvcmRfUjIlMjZ1dG1fYWRncm91cF9pZCUzZDEzMjQ5MTQ2MDgwNzAwNTklMjZ1dG1fdGVybSUzZHBkZiUyNTIwdG8lMjUyMHdvcmQlMjUyMGNvbnZlcnNpb24lMjZ1dG1fY29udGVudCUzZCUyNnV0bV9mdW5uZWwlM2QlMjZwYXJ0bmVyJTNkV00lMjZ1cmwlM2RodHRwcyUyNTNBJTI1MkYlMjUyRnplbmRvY3MuY29tJTI1MkZwZGYtdG8td29yZCUyNm1zY2xraWQlM2Q2YjNiMGFkMTc1NmMxNTdiZWRiZTYwMmRjYTRmOTRiZA&rlid=6b3b0ad1756c157bedbe602dca4f94bd",
+        "reason": "advert or redirect link"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T20:55:37Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "pain",
+    "query": "university students PDF to Word conversion site:news.ycombinator.com",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://www.bing.com/aclick?ld=e8cYYG7MeKpUk7M3zN6dHYejVUCUzH6ozOoEa0dxyCY7StgNuIOO0Sd4494tJmdUiZotTtaHHeUptVrnZAfUUBXH8PMgAckdBImA6KKNRkePmAJ1WCAcBehROM1J7hH1acdN6W5ObTqyO6hIAX2mCiGpVqmEka4ZgoIUg1Svt2iI-vlQgsPa_iu9PktLU_JXsgyn8sPt4AdaMAK2JBEmpJWCtPq-s&u=aHR0cHMlM2ElMmYlMmZwaXhlbC5ldmVyZXN0dGVjaC5uZXQlMmYzMDg1JTJmY3ElM2Zldl9zaWQlM2QxMCUyNmV2X2xuJTNkY29udmVydCUyNTIwcGRmJTI1MjB0byUyNTIwd29yZCUyNTIwZG9jJTI2ZXZfbHR4JTNkJTI2ZXZfbHglM2Rrd2QtNzk3ODM4NTQ1NzExMzclM2Fsb2MtMTg3JTI2ZXZfY3J4JTNkNzk3ODM0ODgzMzUzMjYlMjZldl9tdCUzZGUlMjZldl9kdmMlM2RjJTI2ZXZfcGh5JTNkMTU0NTIyJTI2ZXZfbG9jJTNkJTI2ZXZfY3glM2Q0MDI0NTIzMTYlMjZldl9heCUzZDEyNzY1MzM4MTI3NjIwOTUlMjZldl9leCUzZCUyNmV2X2VmaWQlM2QxYjdlMzY4YzlmODMxOWIzYjAwYjVjNzAyMGE2NjI5ZCUzYUclM2FzJTI2dXJsJTNkaHR0cHMlMjUzQSUyNTJGJTI1MkZhY3JvYmF0LmFkb2JlLmNvbSUyNTJGdG9vbHMlMjUyRnBkZi10by13b3JkJTI1M0ZzZGlkJTI1M0RKQ05DV0ZYRiUyNTI2bXYlMjUzRHNlYXJjaCUyNTI2bXYyJTI1M0RwYWlkc2VhcmNoJTI1MjZlZl9pZCUyNTNEMWI3ZTM2OGM5ZjgzMTliM2IwMGI1YzcwMjBhNjYyOWQlMjUzQUclMjUzQXMlMjUyNnNfa3djaWQlMjUzREFMITMwODUhMTAhNzk3ODM0ODgzMzUzMjYhISEhNzk3ODM4NTQ1NzExMzchITQwMjQ1MjMxNiExMjc2NTMzODEyNzYyMDk1JTI1MjZtdiUyNTNEc2VhcmNoJTI2bXYlM2RzZWFyY2glMjZtdjIlM2RwYWlkc2VhcmNoJTI2bXNjbGtpZCUzZDFiN2UzNjhjOWY4MzE5YjNiMDBiNWM3MDIwYTY2Mjlk&rlid=1b7e368c9f8319b3b00b5c7020a6629d",
+        "reason": "advert or redirect link"
+      },
+      {
+        "url": "https://news.ycombinator.com/user?id=aaditsingal7859",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://news.ycombinator.com/item?id=41549649",
+        "reason": "keyword score 0: shares no word with the query"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T20:55:37Z",
+    "agent": "researcher",
+    "action": "judge_relevance",
+    "sources": [],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "pain",
+    "candidates": 1,
+    "kept": 0,
+    "web_search_ok": true,
+    "tokens": 611,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T20:55:42Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "competitors",
+    "query": "website converter app Egypt",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://www.webintoapp.com/",
+        "reason": "the model judged it not relevant"
+      },
+      {
+        "url": "https://www.appypie.com/convert-website-to-mobile-apps",
+        "reason": "the model judged it not relevant"
+      },
+      {
+        "url": "https://m.web2application.com/",
+        "reason": "the model judged it not relevant"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T20:55:42Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "competitors",
+    "query": "website converter site:play.google.com",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://www.bing.com/aclick?ld=e8RcEc-MAgdiF9jk6pnTka-jVUCUwYdg1_dkqkY4PwZUPdnqqUTZGNpIfgoWzPrpjVLjFDNivNb1MmqNurwErRuajt6WF4yYoads0f5iym6IsOzCCg63aLs85GyJH0847ror-ZC6DvxjAqWzSvQNk6VIiO_mvBumrwEjkG9oUOJw-tG6McGvf4-NGBWBt2OJZoIvEznzUmgwXZjnqAQOhP_snTerU&u=aHR0cHMlM2ElMmYlMmZwaXhlbC5ldmVyZXN0dGVjaC5uZXQlMmYzMDg1JTJmY3ElM2Zldl9zaWQlM2QxMCUyNmV2X2xuJTNkZmlsZSUyNTIwY29udmVydGVyJTI2ZXZfbHR4JTNkJTI2ZXZfbHglM2Rrd2QtNzkxNjU0NTU0MjYxNDAlM2Fsb2MtMTg3JTI2ZXZfY3J4JTNkNzkxNjUwNDc3MzE5MTglMjZldl9tdCUzZHAlMjZldl9kdmMlM2RjJTI2ZXZfcGh5JTNkMTU0NTIyJTI2ZXZfbG9jJTNkJTI2ZXZfY3glM2Q1MDYyMjU4MDQlMjZldl9heCUzZDEyNjY2MzkwNjc5MDYxNTAlMjZldl9leCUzZCUyNmV2X2VmaWQlM2RiNmI3M2VkYmQ0ZWExMTM0MzExMjU0Mjc2YmNiY2VlZSUzYUclM2FzJTI2dXJsJTNkaHR0cHMlMjUzQSUyNTJGJTI1MkZ3d3cuYWRvYmUuY29tJTI1MkZhY3JvYmF0JTI1MkZvbmxpbmUlMjUyRmNvbnZlcnQtcGRmLmh0bWwlMjUzRnNkaWQlMjUzREhRWjZYMkxMJTI1MjZtdiUyNTNEc2VhcmNoJTI1MjZtdjIlMjUzRHBhaWRzZWFyY2glMjUyNmVmX2lkJTI1M0RiNmI3M2VkYmQ0ZWExMTM0MzExMjU0Mjc2YmNiY2VlZSUyNTNBRyUyNTNBcyUyNTI2c19rd2NpZCUyNTNEQUwhMzA4NSExMCE3OTE2NTA0NzczMTkxOCEhISE3OTE2NTQ1NTQyNjE0MCEhNTA2MjI1ODA0ITEyNjY2MzkwNjc5MDYxNTAlMjUyNm12JTI1M0RzZWFyY2glMjZtdiUzZHNlYXJjaCUyNm12MiUzZHBhaWRzZWFyY2glMjZtc2Nsa2lkJTNkYjZiNzNlZGJkNGVhMTEzNDMxMTI1NDI3NmJjYmNlZWU&rlid=b6b73edbd4ea1134311254276bcbceee",
+        "reason": "advert or redirect link"
+      },
+      {
+        "url": "https://play.google.com/store/apps/details?id=com.webtoapp.convertwebsitetoapp&hl=en-US",
+        "reason": "same source already kept"
+      },
+      {
+        "url": "https://play.google.com/store/apps/details?id=com.appcollection.web2app&hl=en-US",
+        "reason": "the model judged it not relevant"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T20:55:42Z",
+    "agent": "researcher",
+    "action": "judge_relevance",
+    "sources": [],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "competitors",
+    "candidates": 4,
+    "kept": 0,
+    "web_search_ok": true,
+    "tokens": 977,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T20:55:52Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "regulation",
+    "query": "document conversion regulation site:gov.eg",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://sdk.invoicing.eta.gov.eg/document-validation-rules/",
+        "reason": "the model judged it not relevant"
+      },
+      {
+        "url": "https://dev.edaegypt.gov.eg/media/xhcdw4c4/regulatory-guide-450-2023_2026.pdf",
+        "reason": "the model judged it not relevant"
+      },
+      {
+        "url": "https://www.edaegypt.gov.eg/media/dscbqoql/regulatory-guide-eda-chairman-decree-450-version-4-2.pdf",
+        "reason": "the model judged it not relevant"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T20:55:52Z",
+    "agent": "researcher",
+    "action": "judge_relevance",
+    "sources": [],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "evidence_type": "regulation",
+    "candidates": 3,
+    "kept": 0,
+    "web_search_ok": true,
+    "tokens": 784,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T20:55:52Z",
+    "agent": "researcher",
+    "action": "research_summary",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "claims": 2,
+    "by_type": {
+      "pain": 0,
+      "competitors": 0,
+      "pricing": 0,
+      "market": 2,
+      "regulation": 0
+    },
+    "search_gaps": [
+      "pricing"
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T20:55:54Z",
+    "agent": "skeptic",
+    "action": "check_founder_claims",
+    "sources": [],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "tokens": 1079,
+    "parsed": true,
+    "retried": false,
+    "verdicts": []
+  },
+  {
+    "timestamp": "2026-11-17T20:55:55Z",
+    "agent": "scorer",
+    "action": "score_rubric_scores",
+    "sources": [
+      "https://api.worldbank.org/v2/country/EG/indicator/IT.NET.USER.ZS?format=json&mrnev=1",
+      "https://api.worldbank.org/v2/country/EG/indicator/SP.POP.TOTL?format=json&mrnev=1"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "round": 1,
+    "tokens": 1590,
+    "parsed": true,
+    "retried": false,
+    "scores": {
+      "problem_evidence": 0.0,
+      "market": 1.0,
+      "competition": 1.0,
+      "founder_fit": 2.0,
+      "feasibility": 3.0,
+      "willingness_to_pay": 0.0,
+      "rules_risk": 3.0
+    },
+    "claim_ids": {
+      "problem_evidence": [],
+      "market": [
+        "C1",
+        "C2"
+      ],
+      "competition": [],
+      "founder_fit": [],
+      "feasibility": [],
+      "willingness_to_pay": [],
+      "rules_risk": []
+    },
+    "scoring_incomplete": []
+  },
+  {
+    "timestamp": "2026-11-17T20:55:56Z",
+    "agent": "evaluation_memo",
+    "action": "write_memo",
+    "sources": [
+      "https://api.worldbank.org/v2/country/EG/indicator/SP.POP.TOTL?format=json&mrnev=1",
+      "https://api.worldbank.org/v2/country/EG/indicator/IT.NET.USER.ZS?format=json&mrnev=1"
+    ],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "outcome": "stop",
+    "memo_source": "model",
+    "removed": {
+      "unknown_claim_ids": 0,
+      "uncited_numbers": 6,
+      "guardrail_sentences": 0
+    },
+    "output": "phase1_step5_evaluation.md",
+    "tokens": 1119,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T20:55:56Z",
+    "agent": "gate",
+    "action": "gate_1",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1b",
+    "outcome": "stop",
+    "score": 1.35,
+    "round": 1,
+    "guardrail_violations": [],
+    "memo_source": "agents.evaluation_memo"
+  }
+]

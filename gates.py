@@ -188,10 +188,12 @@ def evaluate_gate_1(
     gaps = [g for g in (evidence_gaps or []) if g]
     if gaps:
         result = evaluate_gate_1(scores, claims, violations, rubric, rewritable_violations)
+        clean = check_scores(scores, rubric or load_rubric())
         evidence_stop = (
             result.recommendation == "stop" and not [v for v in (violations or []) if v]
-            and check_scores(scores, rubric or load_rubric())["competition"] != 0
-            and check_scores(scores, rubric or load_rubric())["rules_risk"] != 0
+            and clean["competition"] != 0 and clean["rules_risk"] != 0
+            # No pain evidence is held at repeat only if the pain searches themselves failed.
+            and not (clean["problem_evidence"] == 0 and not any("pain" in g or "problem" in g for g in gaps))
         )
         if evidence_stop:
             reasons = [*result.reasons,
