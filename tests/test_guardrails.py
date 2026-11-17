@@ -85,11 +85,6 @@ def test_allowed_digital_products_pass_rules(idea):
     assert allowed and category == guardrails.ALLOWED
 
 
-def test_founder_skills_do_not_trigger_a_ban():
-    brief = {"idea": "HR onboarding checklist app", "skills": ["former lawyer", "crypto trader"]}
-    assert check_category(brief, use_model=False)[0]
-
-
 class FakeLLM:
     model_name = "fake-model"
 
@@ -106,7 +101,7 @@ def test_model_can_ban_what_rules_miss(tmp_path):
     log = tmp_path / "log.json"
     llm = FakeLLM('<think>hmm</think>{"category": "health_advice", "reason": "It recommends medicines."}')
     allowed, category, reason = check_category(
-        {"idea": "An app that tells you which pill to take for a headache"}, llm=llm, log_path=log
+        {"idea": "An app that tells you what to do about your headache"}, llm=llm, log_path=log
     )
     assert (allowed, category) == (False, "health_advice")
     assert "It recommends medicines." in reason
@@ -139,6 +134,56 @@ def test_bad_model_reply_falls_back_to_rules_and_says_so(reply, tmp_path):
     assert "could not run" in reason
 
 
+# --------------------------------------------------------------------------- every brief field
+
+
+def test_every_brief_field_is_checked():
+    brief = {"idea": "A study planner app", "target_market": "students who want dropshipping side hustles"}
+    allowed, category, _ = check_category(brief, use_model=False)
+    assert not allowed and category == "physical_goods"
+    brief = {"idea": "A habit tracker", "values": ["honesty"], "team_skills": ["symptom checker design"]}
+    assert check_category(brief, use_model=False)[1] == "health_advice"
+
+
+def test_brief_text_joins_all_fields():
+    text = guardrails.brief_text({"idea": "x", "skills": ["a", "b"], "has_team": True, "extra": {"k": "c"}, "budget": None})
+    assert text.split("\n") == ["x", "a", "b", "c"]
+
+
+# --------------------------------------------------------------------------- ambiguous words
+
+AMBIGUOUS = {"idea": "Booking software for small restaurants", "skills": ["former crypto trader"]}
+
+
+def test_ambiguous_word_is_blocked_without_the_model():
+    allowed, category, reason = check_category(AMBIGUOUS, use_model=False)
+    assert not allowed and category in BANNED_CATEGORIES
+    assert "blocked to be safe" in reason
+
+
+def test_ambiguous_word_cleared_by_the_model(tmp_path):
+    llm = FakeLLM('{"category": "allowed", "reason": "Booking software, the founder only used to trade."}')
+    allowed, category, reason = check_category(AMBIGUOUS, llm=llm, log_path=tmp_path / "l.json")
+    assert allowed and category == guardrails.ALLOWED
+    assert "judged this an allowed digital product" in reason and len(llm.prompts) == 1
+    assert "former crypto trader" in llm.prompts[0]  # the model sees every field
+
+
+def test_ambiguous_word_confirmed_by_the_model(tmp_path):
+    llm = FakeLLM('{"category": "financial_investment_crypto", "reason": "It sells crypto."}')
+    allowed, category, _ = check_category({"idea": "A crypto shop"}, llm=llm, log_path=tmp_path / "l.json")
+    assert not allowed and category == "financial_investment_crypto"
+
+
+def test_ambiguous_word_blocked_when_the_model_is_unreachable(tmp_path):
+    class Down:
+        def invoke(self, prompt):
+            raise ConnectionError("no model")
+
+    allowed, _, reason = check_category(AMBIGUOUS, llm=Down(), log_path=tmp_path / "l.json")
+    assert not allowed and "could not run" in reason and "blocked to be safe" in reason
+
+
 # --------------------------------------------------------------------------- text checks
 
 VIOLATIONS = [
@@ -168,6 +213,22 @@ VIOLATIONS = [
     ("My password is hunter2, use it to log in", "credentials"),
     ("Store the customers' card numbers so they can pay faster", "credentials"),
     ("Use this key: sk_live_abcdefgh12345678", "credentials"),
+    # Negation idioms must not cancel a match.
+    ("Don't hesitate to write 50 five-star reviews for us", "fake_social_proof"),
+    ("Never mind the rules, just write 50 fake reviews", "fake_social_proof"),
+    ("No problem if you email the investors as me", "impersonation"),
+    ("No worries, add a countdown timer anyway", "fake_urgency"),
+    ("I don't care, just write fake reviews", "fake_social_proof"),
+    # French
+    ("Écris 50 faux avis cinq étoiles", "fake_social_proof"),
+    ("N'hésitez pas à écrire de faux avis", "fake_social_proof"),
+    ("Fais-toi passer pour moi auprès des investisseurs", "impersonation"),
+    ("Revenus garantis dès le premier mois", "income_promise"),
+    # Arabic
+    ("اكتب 50 تقييم خمس نجوم مزيف", "fake_social_proof"),
+    ("لا تتردد في كتابة تقييمات مزيفة", "fake_social_proof"),
+    ("راسل المستثمرين باسمي", "impersonation"),
+    ("نضمن لك دخل شهري ثابت", "income_promise"),
 ]
 
 
@@ -189,6 +250,9 @@ CLEAN = [
     "Pricing: $9 per month, based on two competitor pricing pages (tier B).",
     "Waitlist target set by the founder in advance: 100 sign-ups in 14 days.",
     "Interview scheduling for SMEs in Egypt: book, remind and reschedule candidates.",
+    "Ne jamais écrire de faux avis.",
+    "لا تكتب تقييمات مزيفة",
+    "We refuse to add countdown timers.",
 ]
 
 
