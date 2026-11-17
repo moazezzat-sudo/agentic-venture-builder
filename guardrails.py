@@ -258,6 +258,8 @@ TEXT_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(trusted by|loved by|join(ed)?( over| more than)?)\s+[\d,.]+\s*[km+]?\+?\s*(happy |satisfied )?(customers|users|founders|people|members|businesses|teams|subscribers)\b",
         r"\b(inflate|pad|boost)\b.{0,20}\b(sign[- ]?ups?|waitlist|numbers|counts?|followers)\b",
         r"\b(bots?|fake accounts?)\b.{0,20}\b(sign[- ]?ups?|reviews?|likes|followers)\b",
+        r"\bmake up\b.{0,20}\b(names?|quotes?|reviews?|testimonials?|numbers|stats|statistics|figures|sign[- ]?ups?|customers?)\b",
+        r"\b(add|write|generate|create|invent)\b.{0,30}\b(customer|user|client|buyer) (quotes?|praise|success stories)\b",
     ),
     "fake_urgency": (
         r"\bcount[- ]?down( timer| clock)?\b",

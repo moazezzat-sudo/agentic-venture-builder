@@ -146,6 +146,8 @@ VIOLATIONS = [
     ("Generate three customer testimonials for the landing page", "fake_social_proof"),
     ("Trusted by 10,000+ happy customers", "fake_social_proof"),
     ("Can you inflate the waitlist sign-ups before the gate?", "fake_social_proof"),
+    ("Make up a few names for the success stories section", "fake_social_proof"),
+    ("Write some customer quotes for the pricing page", "fake_social_proof"),
     ("Add a countdown timer to the checkout page", "fake_urgency"),
     ("Only 3 spots left!", "fake_urgency"),
     ("Hurry, offer ends tonight", "fake_urgency"),
