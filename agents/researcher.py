@@ -49,15 +49,32 @@ def plain_query(query: str) -> str:
     return " ".join(re.sub(r"[  -​ ]", " ", query).split())
 
 
+STOPWORDS = {"site", "with", "that", "this", "from", "your", "their", "they", "have", "need", "needs", "into",
+              "about", "what", "when", "which", "tools", "tool", "apps", "app", "software", "best", "online", "egypt"}
+
+
+def _words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 3 and w not in STOPWORDS}
+
+
+def relevant(query: str, result: dict[str, Any]) -> bool:
+    """False when a result shares no meaningful word with the query (search fallbacks sometimes return
+    unrelated pages, such as encyclopedia articles about large companies). Plain word overlap, no model."""
+    wanted = _words(re.sub(r"site:\S+", "", query))
+    found = _words(f"{result.get('title', '')} {result.get('snippet', '')} {result.get('url', '')}")
+    return not wanted or bool(wanted & found) or bool({w[:5] for w in wanted} & {w[:5] for w in found})
+
+
 def find_sources(query: str) -> list[dict[str, Any]]:
-    """Search and rate. Returns [{i, title, url, snippet, tier}]. Skips ads, redirects and non-http(s) URLs."""
+    """Search and rate. Returns [{i, title, url, snippet, tier}]. Skips ads, redirects, results unrelated
+    to the query, and non-http(s) URLs."""
     from tools.credibility import rate
     from tools.search import search
 
     sources = []
     for r in search(plain_query(query), max_results=MAX_RESULTS)[:MAX_RESULTS]:
         url = str(r.get("url", ""))
-        if AD_URL.match(url):
+        if AD_URL.match(url) or not relevant(query, r):
             continue
         try:
             tier = rate(url)
@@ -120,7 +137,10 @@ def gather_sources(area: dict[str, Any]) -> list[dict[str, Any]]:
     """
     found = find_sources(area["query"])
     if area.get("forum_query"):
-        found += [dict(s, forum=True) for s in find_sources(area["forum_query"])]
+        # Keep only results from the forum itself: a search fallback that ignores "site:" returns other pages.
+        site = re.search(r"site:(\S+)", area["forum_query"])
+        found += [dict(s, forum=True) for s in find_sources(area["forum_query"])
+                  if not site or site.group(1).lower() in s["url"].lower()]
     sources, seen = [], set()
     for s in found:
         if s["url"] in seen:

@@ -7,6 +7,7 @@ that nothing moves past a gate without a FounderDecision.
 
 import functools
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -67,7 +68,11 @@ class FakeModel:
 
 def fake_search(query, max_results=3):
     n = abs(hash(query)) % 1000
-    return [{"title": f"r{i}", "url": f"https://site{n}-{i}.example.org/p", "snippet": "snippet " * 80} for i in range(max_results)]
+    # Titles echo the query, like real results do, so the relevance filter keeps them;
+    # a "site:" query returns pages from that site.
+    site = re.search(r"site:(\S+)", query)
+    base = (lambda i: f"https://{site.group(1)}/t/{n}-{i}") if site else (lambda i: f"https://site{n}-{i}.example.org/p")
+    return [{"title": f"r{i}: {query}", "url": base(i), "snippet": "snippet " * 80} for i in range(max_results)]
 
 
 def fake_indicator(country, code):
@@ -318,11 +323,28 @@ def test_ad_and_redirect_links_are_not_sources(monkeypatch):
     monkeypatch.setattr(tools.search, "search", lambda q, max_results=3: [
         {"title": "ad", "url": "https://www.bing.com/aclick?ld=abc&u=xyz", "snippet": "Try Xero"},
         {"title": "ad", "url": "https://www.googleadservices.com/pagead/aclk?sa=L", "snippet": "ad"},
-        {"title": "real", "url": "https://www.xero.com/pricing", "snippet": "Plans from 15 USD"},
+        {"title": "Xero invoicing pricing", "url": "https://www.xero.com/pricing", "snippet": "Plans from 15 USD"},
     ])
     monkeypatch.setattr(tools.credibility, "rate", lambda url: "B")
     sources = researcher.find_sources("invoicing tools")
     assert [s["url"] for s in sources] == ["https://www.xero.com/pricing"] and sources[0]["i"] == 0
+
+
+def test_unrelated_and_off_forum_results_are_dropped(monkeypatch):
+    from agents import researcher
+
+    def search(q, max_results=3):
+        if "site:reddit.com" in q:  # a fallback engine that ignores site: returns encyclopedia pages
+            return [{"title": "Amazon (company)", "url": "https://en.wikipedia.org/wiki/Amazon", "snippet": "students"},
+                    {"title": "PDF to Word for students?", "url": "https://www.reddit.com/r/college/x", "snippet": ""}]
+        return [{"title": "Camel case", "url": "https://en.wikipedia.org/wiki/Camel_case", "snippet": "naming"},
+                {"title": "Convert PDF to Word free", "url": "https://www.ilovepdf.com/pdf_to_word", "snippet": ""}]
+
+    monkeypatch.setattr(tools.search, "search", search)
+    monkeypatch.setattr(tools.credibility, "rate", lambda url: "B")
+    area = {"name": "a", "query": "students converting PDF to Word", "forum_query": "students converting PDF to Word site:reddit.com"}
+    urls = [s["url"] for s in researcher.gather_sources(area)]
+    assert urls == ["https://www.ilovepdf.com/pdf_to_word", "https://www.reddit.com/r/college/x"]
 
 
 def test_competitor_price_counts_as_willingness_to_pay_evidence():
