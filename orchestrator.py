@@ -37,6 +37,7 @@ The outcome at every gate comes from gates.py (plain Python), never the model.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any, Optional, Union
 
 from langgraph.graph import END, START, StateGraph
@@ -45,6 +46,7 @@ from langgraph.types import Command, Send, interrupt
 from agents import coach, intake, researcher, scorer, skeptic, subdomain, weigher
 from agents._common import describe_violation, text_violations
 from agents.scorer import current_claims
+import gates as gates_mod
 from gates import evaluate_gate_1, load_rubric
 from logger import log_action, write_gate, write_output
 from schemas import Briefcase, FounderDecision, GateResult
@@ -133,10 +135,12 @@ def _gate_markdown(result: GateResult, decision: Optional[FounderDecision]) -> s
     reasons = "\n".join(f"- {r}" for r in result.reasons)
     score = f"{result.score:.2f} of 4" if result.score is not None else "not scored"
     body = (
-        f"# Phase 1 gate: {result.gate}\n\n"
+        f"# Phase {result.phase} gate: {result.gate}\n\n"
         f"Recommendation: **{result.recommendation.upper()}**\n\nWeighted score: {score}\n\n"
         f"Target set before the phase: {result.target}\n\nEvidence: {result.evidence_summary}\n\n## Reasons\n\n{reasons}\n\n"
-        "The recommendation comes from fixed rules in gates.py and rubric.yaml; the weights and cut-offs are our design choices.\n\n"
+        "The recommendation comes from fixed rules in gates.py"
+        + (" and rubric.yaml; the weights and cut-offs are our design choices" if result.phase == 1 else "")
+        + ".\n\n"
         "## Founder decision\n\n"
     )
     if decision is None:
@@ -148,8 +152,12 @@ def _gate_markdown(result: GateResult, decision: Optional[FounderDecision]) -> s
     )
 
 
+GATE_FILES = {GATE_1: "decision", GATE_1_NICHE: "niche_decision", "gate_3_plan": "plan_decision"}
+
+
 def _gate_file(gate: str) -> str:
-    return "decision" if gate == GATE_1 else "niche_decision"
+    """outputs/phase<N>_gate_<this>.md"""
+    return GATE_FILES.get(gate, "decision")
 
 
 def current_drafts(state: Briefcase) -> dict[str, str]:
@@ -206,11 +214,11 @@ def make_gate_wait(gate: str):
         # Pauses until the founder answers. resume_run only accepts a FounderDecision here.
         reply = interrupt({"kind": "gate", **result.model_dump()})
         decision = FounderDecision(**reply)
-        if decision.gate != gate or decision.phase != 1:
+        if decision.gate != gate or decision.phase != result.phase:
             raise ValueError(f"decision is for {decision.gate!r}, but the run is waiting at {gate!r}")
         check_approval(decision, result.recommendation)
         decision = decision.model_copy(update={"overrides_recommendation": decision.outcome != result.recommendation})
-        write_gate(1, _gate_file(gate), _gate_markdown(result, decision))
+        write_gate(result.phase, _gate_file(gate), _gate_markdown(result, decision))
         log_action(agent="gate", action=f"{gate}_founder_decision", model=None, approved_by="founder",
                    run_id=state.get("run_id"), round=state.get("round", 1),
                    outcome=decision.outcome, recommendation=result.recommendation,
@@ -220,6 +228,10 @@ def make_gate_wait(gate: str):
         update: dict[str, Any] = {"founder_decisions": [decision.model_dump()]}
         if decision.outcome == "stop":
             update.update(stopped=True, stop_reason=f"Founder chose stop at {gate}.")
+        if decision.outcome == "repeat" and gate in PHASE_GATE_NODES:
+            repeats = dict(state.get("phase_repeats") or {})
+            repeats[gate] = repeats.get(gate, 0) + 1
+            update["phase_repeats"] = repeats
         return update
 
     node.__name__ = f"{gate}_wait"
@@ -241,7 +253,7 @@ def after_gate(gate: str):
             return "finish"
         if outcome in ("repeat", "pivot"):
             return "coach" if state.get("round", 1) < MAX_ROUNDS else "round_limit"
-        return "subdomain" if gate == GATE_1 else "finish"
+        return "subdomain" if gate == GATE_1 else "phase_2"
 
     return route
 
@@ -274,15 +286,16 @@ def run_tokens(run_id: str) -> int:
 def finish_node(state: Briefcase) -> dict[str, Any]:
     stopped = bool(state.get("stopped"))
     tokens = run_tokens(state["run_id"])
-    phase = 1 if stopped else 2
+    phase = int(state.get("current_phase") or 1)
     # "run_tokens", not "tokens": this entry reports the total and must not be summed again.
-    log_action(agent="orchestrator", action="phase1_finished", model=None, run_id=state.get("run_id"),
-               stopped=stopped, run_tokens=tokens,
+    log_action(agent="orchestrator", action="run_finished", model=None, run_id=state.get("run_id"),
+               stopped=stopped, phase=phase, run_tokens=tokens,
                over_token_budget=tokens > TOKEN_BUDGET)
     last = state.get("gate_results", [{}])[-1] if state.get("gate_results") else {}
-    write_output(1, 10, "result", (
-        "# Phase 1 result\n\n"
-        + (f"**Stopped.** {state.get('stop_reason', '')}\n\n" if stopped else "**Phase 1 finished; the founder approved go. Phase 2 (Validate) is next.**\n\n")
+    done = "**All six phases finished; the founder approved go at every gate.**\n\n"
+    write_output(phase, 10 if phase == 1 else 9, "result", (
+        f"# Run result (ended in Phase {phase})\n\n"
+        + (f"**Stopped in Phase {phase}.** {state.get('stop_reason', '')}\n\n" if stopped else done)
         + f"Last gate: {last.get('gate', 'none')}, recommended {str(last.get('recommendation', 'n/a')).upper()}.\n\n"
         + f"Rounds: {state.get('round', 1)}. Model tokens used: {tokens}, summed from decision_log.json "
         f"(budget {TOKEN_BUDGET}).\n"
@@ -326,10 +339,145 @@ def build_graph(checkpointer=None):
     g.add_edge("subdomain", "rescore")
     g.add_edge("rescore", "gate_1_niche")
     g.add_edge("gate_1_niche", "gate_1_niche_wait")
-    g.add_conditional_edges("gate_1_niche_wait", after_gate(GATE_1_NICHE), ["finish", "coach", "round_limit"])
+    g.add_conditional_edges("gate_1_niche_wait", after_gate(GATE_1_NICHE), ["finish", "coach", "round_limit", "phase_2"])
+    add_later_phases(g)
     g.add_edge("round_limit", "finish")
     g.add_edge("finish", END)
     return g.compile(checkpointer=checkpointer)
+
+
+# ---------------------------------------------------------------- Phases 2-6
+
+# (node, phase, agent module, gate). Each phase ends at its own founder gate; go moves to the next row.
+LATER_PHASES = [
+    ("phase_2", 2, "agents.phase2_lean_canvas", "gate_2"),
+    ("phase_3_plan", 3, "agents.phase3_build_plan", "gate_3_plan"),
+    ("phase_3_build", 3, "agents.phase3_build", "gate_3"),
+    ("phase_4", 4, "agents.phase4_commercial", "gate_4"),
+    ("phase_5", 5, "agents.phase5_launch", "gate_5"),
+    ("phase_6", 6, "agents.phase6_memo", "gate_6"),
+]
+PHASE_GATE_NODES = {gate: node for node, _, _, gate in LATER_PHASES}
+MAX_PHASE_REPEATS = 2  # repeats chosen at one gate before the run stops
+GATE_2_QUESTIONS = [
+    {"field": "waitlist_target", "question": "Waitlist test: how many sign-ups is your target, set before the test? (a number)"},
+    {"field": "waitlist_count", "question": "How many real sign-ups do you have? Leave this empty if the test has not run yet."},
+    {"field": "paid_orders", "question": "For Phase 6: how many paid orders in the first month would mean it works? (a number)"},
+]
+
+
+def make_phase_node(phase: int, module_name: str):
+    def node(state: Briefcase) -> dict[str, Any]:
+        import importlib
+
+        update = dict(importlib.import_module(module_name).agent(state))
+        update["current_phase"] = phase
+        update["text_violations"] = [{**v, "phase": phase} for v in update.get("text_violations") or []]
+        return update
+
+    node.__name__ = module_name.rsplit(".", 1)[-1]
+    return node
+
+
+def gate_2_targets_node(state: Briefcase) -> dict[str, Any]:
+    """Pause for the founder's waitlist target and real count. Nothing is estimated for them."""
+    reply = interrupt({"kind": "questions", "stage": "gate_2_targets", "questions": GATE_2_QUESTIONS}) or {}
+    answers = {k: str(v).strip() for k, v in (reply.get("answers") or {}).items() if str(v).strip()}
+    targets = dict(state.get("targets") or {})
+    for field in ("waitlist_target", "waitlist_count", "paid_orders"):
+        if field in answers:
+            try:
+                targets[field] = int(answers[field].replace(",", ""))
+            except ValueError:
+                targets[field] = None  # not a number: treated as not entered
+    log_action(agent="gate", action="gate_2_targets", model=None, approved_by="founder", run_id=state.get("run_id"),
+               targets=targets)
+    return {"targets": targets, "founder_answers": {**(state.get("founder_answers") or {}), **answers}}
+
+
+def _payment_test() -> tuple[bool, str]:
+    """Hashish's MOCKED sale-to-cash test (payments.run_payment_test), written to outputs/payment_test_log.md."""
+    import tempfile
+
+    import logger
+    from payments import run_payment_test
+
+    out = Path(logger.settings.outputs_dir) / "payment_test_log.md"
+    path = run_payment_test(out_path=out, log_path=Path(tempfile.mkdtemp()) / "mock_store_log.json")
+    failed = path.read_text(encoding="utf-8").count("| FAIL |")
+    return failed == 0, f"{failed} step(s) failed" if failed else "all steps passed"
+
+
+def make_phase_gate_eval(gate: str):
+    def node(state: Briefcase) -> dict[str, Any]:
+        drafts = state.get("drafts") or {}
+        extra: dict[str, Any] = {}
+        if gate == "gate_2":
+            result = gates_mod.evaluate_gate_2(drafts.get("phase2_lean_canvas") or {}, state.get("targets") or {})
+        elif gate == "gate_3_plan":
+            result = gates_mod.evaluate_gate_3_plan(drafts.get("phase3_build_plan") or {})
+        elif gate == "gate_3":
+            result = gates_mod.evaluate_gate_3(drafts.get("phase3_build") or {})
+        elif gate == "gate_4":
+            result = gates_mod.evaluate_gate_4(drafts.get("phase4_commercial") or {})
+        elif gate == "gate_5":
+            passed, note = _payment_test()
+            extra = {"payment_test_passed": passed, "payment_test": note}
+            result = gates_mod.evaluate_gate_5(drafts.get("phase5_launch") or {}, passed, note)
+        else:
+            result = gates_mod.evaluate_gate_6(drafts.get("phase6_memo") or {})
+        write_gate(result.phase, _gate_file(gate), _gate_markdown(result, None))
+        log_action(agent="gate", action=gate, model=None, run_id=state.get("run_id"), phase=result.phase,
+                   outcome=result.recommendation, **extra)
+        return {"gate_results": [result.model_dump()]}
+
+    node.__name__ = f"{gate}_eval"
+    return node
+
+
+def after_phase_gate(gate: str, next_node: str, phase_node: str):
+    def route(state: Briefcase) -> str:
+        outcome = state["founder_decisions"][-1]["outcome"]
+        if outcome == "stop":
+            return "finish"
+        if outcome == "pivot":
+            return "coach" if state.get("round", 1) < MAX_ROUNDS else "round_limit"
+        if outcome == "repeat":
+            if (state.get("phase_repeats") or {}).get(gate, 0) > MAX_PHASE_REPEATS:
+                return "repeat_limit"
+            draft = (state.get("drafts") or {}).get("phase2_lean_canvas") or {}
+            # Gate 2 usually repeats for a missing real count: ask again rather than redraft the canvas.
+            return "gate_2_targets" if gate == "gate_2" and not draft.get("violations") else phase_node
+        return next_node
+
+    return route
+
+
+def repeat_limit_node(state: Briefcase) -> dict[str, Any]:
+    reason = f"Stopped: repeat chosen more than {MAX_PHASE_REPEATS} times at one gate."
+    log_action(agent="orchestrator", action="repeat_limit_stop", model=None, run_id=state.get("run_id"))
+    return {"stopped": True, "stop_reason": reason}
+
+
+def add_later_phases(g) -> None:
+    """Phases 2-6 after the niche gate: agent -> (Gate 2: founder's targets) -> gate rule -> founder pause."""
+    g.add_node("gate_2_targets", gate_2_targets_node)
+    g.add_node("repeat_limit", repeat_limit_node)
+    g.add_edge("repeat_limit", "finish")
+    for i, (node, phase, module, gate) in enumerate(LATER_PHASES):
+        next_node = LATER_PHASES[i + 1][0] if i + 1 < len(LATER_PHASES) else "finish"
+        g.add_node(node, make_phase_node(phase, module))
+        g.add_node(gate, make_phase_gate_eval(gate))
+        g.add_node(f"{gate}_wait", make_gate_wait(gate))
+        if gate == "gate_2":
+            g.add_edge(node, "gate_2_targets")
+            g.add_edge("gate_2_targets", gate)
+        else:
+            g.add_edge(node, gate)
+        g.add_edge(gate, f"{gate}_wait")
+        targets = sorted({next_node, "finish", "coach", "round_limit", "repeat_limit", node}
+                         | ({"gate_2_targets"} if gate == "gate_2" else set()))
+        g.add_conditional_edges(f"{gate}_wait", after_phase_gate(gate, next_node, node), targets)
 
 
 _graph = None

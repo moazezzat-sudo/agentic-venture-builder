@@ -37,6 +37,16 @@ FULL_BRIEF = {
 CRITERIA = ["problem_evidence", "market", "competition", "founder_fit", "feasibility", "willingness_to_pay", "rules_risk"]
 
 
+def later_phase_reply(agent, nth):
+    """Replies for Hashish's Phase 2-6 agents, reused from his tests (imported here: his tests import this file)."""
+    import test_phase_agents as t
+
+    if agent == "phase3_build":  # three calls per build: format, product, docs
+        return [t.FMT_MD, t.PRODUCT_MD, t.DOCS][(nth - 1) % 3]
+    return {"phase2_lean_canvas": t.CANVAS, "phase3_build_plan": t.BUILD, "phase4_commercial": t.COMMERCIAL,
+            "phase5_launch": t.LAUNCH, "phase6_memo": t.MEMO}.get(agent)
+
+
 class FakeModel:
     def __init__(self, score=4):
         self.score = score
@@ -46,6 +56,9 @@ class FakeModel:
     def __call__(self, agent, system, user, role="smart", max_tokens=500, **kwargs):
         self.calls.append(agent)
         self.kwargs[agent] = {"role": role, "max_tokens": max_tokens, **kwargs}
+        later = later_phase_reply(agent, self.calls.count(agent))
+        if later is not None:
+            return json.dumps(later), 100, 0.0, "fake-model"
         reply = {
             "weigher": {"areas": [{"name": "invoicing pain", "weight": 2, "query": "freelancer invoicing problems"},
                                   {"name": "competitors", "weight": 1, "query": "freelance invoicing tools"}],
@@ -100,7 +113,8 @@ def run(tmp_path, monkeypatch):
 
 
 def decide(result, outcome, approved=None):
-    return FounderDecision(phase=1, gate=result["gate"], approved=outcome == result["recommendation"] if approved is None else approved,
+    return FounderDecision(phase=result.get("phase", 1), gate=result["gate"],
+                           approved=outcome == result["recommendation"] if approved is None else approved,
                            outcome=outcome)
 
 
@@ -127,21 +141,80 @@ def test_intake_asks_only_missing_fields_then_continues(run):
     assert r["kind"] == "gate" and r["gate"] == "gate_1"
 
 
-def test_strong_idea_goes_through_both_gates(run):
-    r = orchestrator.start_run(FULL_BRIEF, "strong")
+TARGETS = {"answers": {"waitlist_target": "100", "waitlist_count": "120", "paid_orders": "10"}}
+LATER_GATES = ["gate_2", "gate_3_plan", "gate_3", "gate_4", "gate_5", "gate_6"]
+
+
+def to_phase_2(run_id):
+    """Start a strong run and approve go at Gate 1 and the niche gate; returns the Gate 2 questions."""
+    r = orchestrator.start_run(FULL_BRIEF, run_id)
     assert r["kind"] == "gate" and r["recommendation"] == "go", r["reasons"]
-    r = orchestrator.resume_run("strong", decide(r, "go"))
+    r = orchestrator.resume_run(run_id, decide(r, "go"))
     assert r["kind"] == "gate" and r["gate"] == "gate_1_niche"
-    r = orchestrator.resume_run("strong", decide(r, "go"))
-    assert r["awaiting_founder"] is False and r["current_phase"] == 2 and not r["stopped"]
+    return orchestrator.resume_run(run_id, decide(r, "go"))
+
+
+def test_strong_idea_goes_through_every_phase(run):
+    r = to_phase_2("strong")
+    assert r["kind"] == "questions" and r["stage"] == "gate_2_targets"
+    r = orchestrator.resume_run("strong", TARGETS)
+    seen = []
+    while r["awaiting_founder"]:
+        assert r["kind"] == "gate", r
+        seen.append((r["gate"], r["recommendation"]))
+        if r["gate"] == "gate_6":  # MOCKED sales can't support persevere: repeat; the founder chooses go
+            assert r["recommendation"] == "repeat"
+            r = orchestrator.resume_run("strong", decide(r, "go", approved=False))
+        else:
+            assert r["recommendation"] == "go", (r["gate"], r["reasons"])
+            r = orchestrator.resume_run("strong", decide(r, "go"))
+    assert [g for g, _ in seen] == LATER_GATES
+    assert r["current_phase"] == 6 and not r["stopped"]
 
     entries = log_entries(run)
     founder = [e for e in entries if e["action"].endswith("_founder_decision")]
-    assert len(founder) == 2 and all(e["approved_by"] == "founder" for e in founder)
+    assert len(founder) == 8 and all(e["approved_by"] == "founder" for e in founder)
     for name in ["phase1_step1_intake.md", "phase1_step3_areas.md", "phase1_step6_scores.md",
-                 "phase1_gate_decision.md", "phase1_step9_interview_kit.md", "phase1_step10_result.md"]:
+                 "phase1_gate_decision.md", "phase1_step9_interview_kit.md", "phase2_step1_lean_canvas.md",
+                 "phase2_gate_decision.md", "phase3_gate_plan_decision.md", "phase3_step2_landing.html",
+                 "phase3_step4_user_docs.md", "phase3_gate_decision.md", "phase4_gate_decision.md",
+                 "payment_test_log.md", "phase5_gate_decision.md", "phase6_step1_memo.md", "phase6_gate_decision.md",
+                 "phase6_step9_result.md"]:
         assert (run["out"] / name).exists(), name
+    assert list(run["out"].glob("phase3_step3_product_*"))
+    assert "All six phases finished" in (run["out"] / "phase6_step9_result.md").read_text(encoding="utf-8")
     assert sum(e.get("tokens", 0) for e in entries) <= orchestrator.TOKEN_BUDGET
+    assert all(e.get("run_id") == "strong" for e in entries if e["agent"] in ("gate", "orchestrator"))
+
+
+def test_gate_2_without_a_real_count_repeats_and_asks_again(run):
+    to_phase_2("no-count")
+    r = orchestrator.resume_run("no-count", {"answers": {"waitlist_target": "100"}})
+    assert r["gate"] == "gate_2" and r["recommendation"] == "repeat"
+    assert any("no real sign-up count" in x for x in r["reasons"])
+    r = orchestrator.resume_run("no-count", decide(r, "repeat"))
+    assert r["kind"] == "questions" and r["stage"] == "gate_2_targets"  # asks again, no new canvas
+    r = orchestrator.resume_run("no-count", {"answers": {"waitlist_count": "12"}})
+    assert r["recommendation"] == "stop"  # 12 of 100: far below the target
+
+
+def test_stop_at_a_later_gate_ends_the_run(run):
+    to_phase_2("later-stop")
+    r = orchestrator.resume_run("later-stop", TARGETS)
+    r = orchestrator.resume_run("later-stop", decide(r, "stop", approved=False))
+    assert r["awaiting_founder"] is False and r["stopped"] and r["current_phase"] == 2
+    assert "Stopped in Phase 2" in (run["out"] / "phase2_step9_result.md").read_text(encoding="utf-8")
+
+
+def test_repeat_at_a_phase_gate_reruns_the_phase_and_is_capped(run):
+    to_phase_2("loop")
+    r = orchestrator.resume_run("loop", TARGETS)
+    r = orchestrator.resume_run("loop", decide(r, "go"))  # gate_2 -> build plan
+    for _ in range(orchestrator.MAX_PHASE_REPEATS + 1):
+        assert r["gate"] == "gate_3_plan"
+        r = orchestrator.resume_run("loop", decide(r, "repeat", approved=False))
+    assert r["awaiting_founder"] is False and r["stopped"] and "repeat chosen more than" in r["stop_reason"]
+    assert run["model"].calls.count("phase3_build_plan") == orchestrator.MAX_PHASE_REPEATS + 1
 
 
 def test_weak_idea_recommends_stop(run):

@@ -28,6 +28,11 @@ BANNED_CATEGORIES = (
 )
 
 
+def merge_dicts(old: Optional[dict[str, Any]], new: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """LangGraph reducer: a node's dict update adds or replaces keys instead of replacing the whole dict."""
+    return {**(old or {}), **(new or {})}
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -137,3 +142,7 @@ class Briefcase(TypedDict, total=False):
     # Areas where no web search engine answered (only fallbacks, or nothing): {round, area, focus}.
     # A stop that rests only on missing evidence becomes repeat (gates.evaluate_gate_1).
     search_gaps: Annotated[list[dict[str, Any]], operator.add]
+    # Phases 2-6 (orchestrator.py wires agents/phase*.py): each agent's draft under its name.
+    drafts: Annotated[dict[str, Any], merge_dicts]
+    targets: dict[str, Any]  # the founder's, set at Gate 2: waitlist_target, waitlist_count, paid_orders
+    phase_repeats: dict[str, int]  # repeats chosen per gate, to cap repeat loops
