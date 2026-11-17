@@ -23,6 +23,7 @@ import logger  # noqa: E402
 import orchestrator  # noqa: E402
 import tools.credibility  # noqa: E402
 import tools.search  # noqa: E402
+import tools.worldbank  # noqa: E402
 from config import Settings  # noqa: E402
 from logger import REQUIRED_KEYS  # noqa: E402
 from schemas import FounderDecision  # noqa: E402
@@ -67,6 +68,15 @@ def fake_search(query, max_results=3):
     return [{"title": f"r{i}", "url": f"https://site{n}-{i}.example.org/p", "snippet": "snippet " * 80} for i in range(max_results)]
 
 
+def fake_indicator(country, code):
+    """Fixed World Bank figures, no network. The URL is the real API URL for that country and code."""
+    return {"value": 1_000_000.0, "year": 2023, "source_url": tools.worldbank.source_url(country, code)}
+
+
+def no_indicator(country, code):
+    return {"value": None, "year": None, "source_url": tools.worldbank.source_url(country, code)}
+
+
 @pytest.fixture
 def run(tmp_path, monkeypatch):
     monkeypatch.setattr(logger, "settings", Settings(outputs_dir=tmp_path / "outputs", decision_log_path=tmp_path / "log.json"))
@@ -74,6 +84,7 @@ def run(tmp_path, monkeypatch):
     monkeypatch.setattr(common, "invoke_model", model)
     monkeypatch.setattr(tools.search, "search", fake_search)
     monkeypatch.setattr(tools.credibility, "rate", lambda url: "B")
+    monkeypatch.setattr(tools.worldbank, "indicator", fake_indicator)
     # Keyword rules only: no model call from the category check.
     monkeypatch.setattr(guardrails, "check_category", functools.partial(guardrails.check_category, use_model=False))
     orchestrator.set_graph(orchestrator.build_graph(InMemorySaver()))
@@ -138,7 +149,9 @@ def test_weak_idea_recommends_stop(run):
 def test_no_search_results_means_stop(run, monkeypatch):
     monkeypatch.setattr(tools.search, "search", lambda q, max_results=3: [])
     r = orchestrator.start_run(FULL_BRIEF, "empty")
+    # World Bank figures are sourced, but they don't show the pain: problem evidence is 0 -> stop.
     assert r["recommendation"] == "stop"
+    assert any("problem_evidence scored 0" in reason for reason in r["reasons"])
     assert "researcher" not in run["model"].calls
 
 
@@ -255,7 +268,25 @@ def test_competition_zero_needs_a_sourced_competitor_claim():
     assert clean_scores(zero, {}, [claim])[0]["competition"] == 0
 
 
-def test_model_cannot_invent_sources(run):
+def test_world_bank_figures_become_tier_a_market_claims(run):
+    orchestrator.start_run(FULL_BRIEF, "worldbank")
+    state = orchestrator.get_graph().get_state(orchestrator._config("worldbank")).values
+    wb = [c for c in state["claims"] if (c.get("url") or "").startswith("https://api.worldbank.org/v2/country/EG/")]
+    assert len(wb) == 2  # population and internet users, from the first area only
+    assert all(c["tier"] == "A" and c["area"] == "market" and c["support"] == "url" for c in wb)
+    # A tier A market source lifts the evidence cap on market.
+    assert state["scores"]["market"] > 1
+
+
+def test_no_world_bank_value_means_no_claim(run, monkeypatch):
+    monkeypatch.setattr(tools.worldbank, "indicator", no_indicator)
+    orchestrator.start_run(FULL_BRIEF, "worldbank-empty")
+    state = orchestrator.get_graph().get_state(orchestrator._config("worldbank-empty")).values
+    assert not [c for c in state["claims"] if "worldbank" in (c.get("url") or "")]
+
+
+def test_model_cannot_invent_sources(run, monkeypatch):
+    monkeypatch.setattr(tools.worldbank, "indicator", no_indicator)  # no tier A/B market source in this run
     orchestrator.start_run(FULL_BRIEF, "sources")
     state = orchestrator.get_graph().get_state(orchestrator._config("sources")).values
     invented = [c for c in state["claims"] if c["text"].startswith("Made-up")]
