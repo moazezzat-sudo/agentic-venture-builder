@@ -31,7 +31,7 @@ def test_every_shown_source_has_its_url_and_tier():
     line = app.claim_line({"text": "Pain is common", "support": "url", "url": "https://www.reddit.com/r/x", "tier": "D"})
     assert "https://www.reddit.com/r/x" in line and "tier D" in line and "community signal" in line
     assumption = app.claim_line({"text": "Market is big", "support": "ASSUMPTION", "tier": "NONE"})
-    assert "ASSUMPTION" in assumption and "](" not in assumption
+    assert "No source found" in assumption and "](" not in assumption
 
 
 def test_run_usage_counts_only_this_runs_entries(tmp_path):
@@ -72,6 +72,15 @@ def test_later_phases_are_labelled_mocked_or_stubbed():
 GATE = {
     "kind": "gate", "phase": 1, "gate": "gate_1", "recommendation": "stop", "reasons": ["Mostly ASSUMPTIONs"],
     "target": "At least 3 independent source URLs", "evidence_summary": "1 of 4 claims sourced", "score": 1.4,
+    "memo": {
+        "verdict": "stop", "headline": "Only one forum post shows the pain, and nobody pays yet.",
+        "why": [{"text": "One community signal of the pain", "claim_ids": ["C1"]},
+                {"text": "No market size found", "claim_ids": ["C2"]}],
+        "per_criterion": [{"criterion": "problem_evidence", "score": 1, "explanation": "One forum post.",
+                           "claim_ids": ["C1"], "counter_evidence": "Designers already use spreadsheets.",
+                           "what_would_change": "Three independent sources showing the pain."}],
+        "unknowns": ["Whether designers would pay"], "next_steps": ["Interview five freelance designers"],
+    },
 }
 STATE = {
     "round": 1, "evidence_from_round": 1, "gate_results": [GATE],
@@ -101,7 +110,14 @@ def fake_orchestrator(calls):
         log_action(agent="orchestrator", action="start_run", run_id=run_id)
         return {"kind": "questions", "stage": "intake", "run_id": run_id, "awaiting_founder": True,
                 "stubbed": False, "stubbed_parts": [],
-                "questions": [{"field": "budget", "question": "What is your budget?"}]}
+                "summary": {"text": "You want an invoice app for freelance designers in Egypt.",
+                            "assumptions": ["You will build it yourself"]},
+                "questions": [
+                    {"id": "budget", "text": "What is your budget?", "why": "Feasibility depends on it.",
+                     "suggestions": ["100 USD", "300 USD"], "choices": None},
+                    {"id": "team", "text": "Do you have a team?", "why": "Founder fit.", "suggestions": [],
+                     "choices": ["Solo", "With a team"]},
+                ]}
 
     def resume_run(run_id, reply):
         calls.append(("resume", reply, run_id))
@@ -160,19 +176,35 @@ def test_brief_questions_gate_and_founder_decision(at):
     by_label(at.text_input, "Location").input("Egypt")
     by_label(at.button, "Start Phase 1").click().run()
     assert at.calls[0][0] == "start" and at.calls[0][1] == {"idea": "Invoice app for freelance designers", "location": "Egypt"}
-    assert any("A few questions before the research" in s.value for s in at.subheader)
+    assert any("Before I research" in s.value for s in at.subheader)
+    page = " ".join(m.value for m in at.markdown)
+    assert "Here's what I understood" in page and "You will build it yourself" in page
+    assert any("Why I ask: Feasibility depends on it." in c.value for c in at.caption)
 
     # Questions -> resume_run with answers
-    by_label(at.text_area, "What is your budget?").input("300 USD")
-    by_label(at.button, "Send answers").click().run()
-    assert at.calls[1][1] == {"answers": {"budget": "300 USD"}}
+    by_label(at.button, "300 USD").click().run()  # a suggestion chip fills the answer
+    assert by_label(at.text_area, "What is your budget?").value == "300 USD"
+    by_label(at.radio, "Do you have a team?").set_value("Solo").run()
+    by_label(at.button, "Send and start the research").click().run()
+    assert at.calls[1][1] == {"answers": {"budget": "300 USD", "team": "Solo"}}
     assert not at.exception
 
     # Gate card: evidence with links and tiers, then the decision button is disabled until a choice is made
     page = " ".join(m.value for m in at.markdown)
-    assert "https://www.reddit.com/r/design/1" in page and "tier D" in page and "ASSUMPTION" in page
+    assert "https://www.reddit.com/r/design/1" in page and "tier D" in page and "No source found" in page
     assert by_label(at.button, "Record my decision").disabled
 
+    # The evaluation: verdict, headline, cited why, a criterion card, unknowns and next steps
+    page = " ".join(m.value for m in at.markdown)
+    assert "Only one forum post shows the pain" in page
+    assert "[[C1]](https://www.reddit.com/r/design/1" in page  # the citation opens its source
+    assert "[C2: no source found]" in page  # an ASSUMPTION is never dressed up as a source
+    assert "Problem evidence" in page and "Designers already use spreadsheets." in page
+    assert "Whether designers would pay" in page and "Interview five freelance designers" in page
+
+    # Request changes needs a note before it can be sent
+    at.radio[0].set_value("changes").run()
+    assert by_label(at.button, "Record my decision").disabled
     at.radio[0].set_value("approve").run()
     record = by_label(at.button, "Record my decision")
     assert not record.disabled
@@ -190,7 +222,7 @@ def test_brief_questions_gate_and_founder_decision(at):
     assert decision.gate == "gate_1" and decision.outcome == "stop" and decision.approved is True
     entries = json.loads(at.log.read_text(encoding="utf-8"))
     assert not [e for e in entries if e.get("approved_by") == "founder"]
-    assert any("Run stopped" in e.value and "Gate 1" in e.value for e in at.error)
+    assert any("We stopped here" in e.value and "Gate 1" in e.value for e in at.error)
 
 
 # ---------------------------------------------------------------- a step fails mid-run
@@ -464,3 +496,43 @@ def test_finished_screen_phase_panels_and_mocked_sale_to_cash(tmp_path, monkeypa
     by_label(at.button, "Run the mocked sale to cash").click().run()
     assert not at.exception and (out / "payment_test_log.md").exists()
     assert any("MOCKED payment test log" in e.label for e in at.expander)
+
+
+
+# ---------------------------------------------------------------- founder actions and demo limit
+
+def test_founder_actions_map_to_a_decision():
+    assert app.founder_decision("approve", "stop") == (True, "stop")
+    assert app.founder_decision("reject", "stop", "repeat") == (False, "repeat")
+    assert app.founder_decision("changes", "go") == (False, "repeat")  # request changes = repeat + note
+    assert app.founder_decision("changes", "repeat") == (True, "repeat")
+
+
+def test_demo_limit_blocks_go_into_the_next_phase_only():
+    niche = {"gate": "gate_1_niche", "phase": 1}
+    assert app.blocked_by_demo_limit(niche, "go", stop_after=1)
+    assert not app.blocked_by_demo_limit({"gate": "gate_1", "phase": 1}, "go", stop_after=1)  # go -> niche, still Phase 1
+    assert not app.blocked_by_demo_limit(niche, "stop", stop_after=1)
+    assert not app.blocked_by_demo_limit(niche, "go", stop_after=6)
+    assert app.blocked_by_demo_limit({"gate": "gate_3", "phase": 3}, "go", stop_after=3)
+
+
+def test_questions_old_and_new_shapes_and_citations():
+    old = app.normalize_question({"field": "budget", "question": "Budget?"})
+    assert old == {"id": "budget", "text": "Budget?", "why": "", "suggestions": [], "choices": None}
+    new = app.normalize_question({"id": "q1", "text": "Who?", "why": "fit", "suggestions": ["me"], "choices": ["a", "b"]})
+    assert new["choices"] == ["a", "b"] and new["suggestions"] == ["me"]
+    index = app.claim_index(STATE)
+    assert set(index) == {"C1", "C2"}
+    assert app.cite(["C1"], index).startswith("[[C1]](https://www.reddit.com/r/design/1")
+    assert app.cite(["C9"], index) == "[C9: no source found]"
+
+
+def test_search_plan_groups_searches_by_evidence_type():
+    state = {"areas": [{"name": "pain", "query": "football pitch booking problems", "evidence_type": "problem"},
+                       {"name": "rivals", "query": "pitch booking apps egypt", "evidence_type": "competitors"},
+                       {"name": "pain2", "query": "5-a-side players complain", "evidence_type": "problem"}]}
+    plan = app.search_plan(state)
+    assert [g["evidence_type"] for g in plan] == ["problem", "competitors"]
+    assert [s["name"] for s in plan[0]["searches"]] == ["pain", "pain2"]
+    assert app.search_plan({"areas": [{"name": "x", "query": "q"}]})[0]["evidence_type"] == "Other evidence"

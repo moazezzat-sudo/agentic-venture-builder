@@ -73,7 +73,7 @@ def tier_badge(claim: dict[str, Any]) -> str:
     """Markdown badge for a claim: its tier, or ASSUMPTION / our own evidence."""
     support = claim.get("support")
     if support == "ASSUMPTION":
-        return ":red-badge[ASSUMPTION]"
+        return ":red-badge[No source found]"
     if support == "evidence":
         return ":violet-badge[our evidence]"
     tier = str(claim.get("tier") or "NONE")
@@ -82,10 +82,15 @@ def tier_badge(claim: dict[str, Any]) -> str:
     return f":{TIER_COLORS[tier]}-badge[Tier {tier} · {TIER_LABELS[tier]}]"
 
 
-def claim_line(claim: dict[str, Any]) -> str:
-    """One markdown line per claim: badge, text, and the link with its tier (or the evidence pointer)."""
+def claim_line(claim: dict[str, Any], cid: str = "") -> str:
+    """One markdown line per claim: id, badge, text, and the link with its tier (or the evidence pointer).
+
+    Tier D (community) is drawn lighter: a signal of pain or demand, never a number.
+    """
     text = str(claim.get("text", "")).replace("\n", " ")
-    line = f"{tier_badge(claim)} {text}"
+    if claim.get("support") == "url" and str(claim.get("tier")) == "D":
+        text = f":gray[{text}]"
+    line = (f"`{cid}` " if cid else "") + f"{tier_badge(claim)} {text}"
     if claim.get("support") == "url" and claim.get("url"):
         line += f" — [source]({claim['url']}) (tier {claim.get('tier', 'NONE')})"
     elif claim.get("support") == "evidence" and claim.get("evidence_ref"):
@@ -125,7 +130,7 @@ def run_entries(entries: list[dict[str, Any]], run_id: str) -> list[dict[str, An
     return out
 
 
-def progress_label(entries: list[dict[str, Any]]) -> str:
+def progress_label(entries: list[dict[str, Any]], location: str = "") -> str:
     """What the run is doing now, in plain words, from its latest log entry."""
     if not entries:
         return "Starting the run…"
@@ -145,7 +150,9 @@ def progress_label(entries: list[dict[str, Any]]) -> str:
         return "Splitting your idea into business areas…"
     if action == "split_areas" or agent == "researcher":
         done = f" ({researched} done)" if researched else ""
-        return f"Searching the web and rating every source, one business area at a time{done}… this is the slow step."
+        where = f" in {location.split(',')[-1].strip()}" if location.strip() else ""
+        return (f"Searching for people who have this problem{where}, and for who already solves it{done}… "
+                "I rate every source as I go. This is the slow step.")
     if agent in ("skeptic", "scorer"):
         return "Checking your statements and scoring the idea on the rubric…"
     if agent == "gate" and action.endswith("_founder_decision"):
@@ -159,6 +166,28 @@ def progress_label(entries: list[dict[str, Any]]) -> str:
     if agent == "orchestrator" and action == "phase1_finished":
         return "Writing the Phase 1 result…"
     return "Working…"
+
+
+def demo_stop_after() -> int:
+    """The demo limit from APP_STOP_AFTER_PHASE (1-6); 6, the default, means no limit."""
+    import os
+
+    try:
+        return min(max(int(os.environ.get("APP_STOP_AFTER_PHASE", "6")), 1), 6)
+    except ValueError:
+        return 6
+
+
+def search_plan(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """What was searched and why, from the weigher's areas, grouped by evidence type."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for area in state.get("areas") or []:
+        if not isinstance(area, dict):
+            continue
+        kind = str(area.get("evidence_type") or area.get("kind") or "Other evidence")
+        groups.setdefault(kind, []).append({"name": str(area.get("name") or ""), "query": str(area.get("query") or ""),
+                                            "why": str(area.get("why") or ""), "weight": area.get("weight")})
+    return [{"evidence_type": k, "searches": v} for k, v in groups.items()]
 
 
 def gate_label(gate: Any) -> str:
@@ -441,6 +470,7 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
     ss.setdefault("result", None)
     ss.setdefault("error", None)
     ss.setdefault("model_error", False)
+    ss.setdefault("stop_after", demo_stop_after())
 
     def call(label: str, fn, *args) -> None:
         """Run an orchestrator call in a thread and show live progress from this run's log entries."""
@@ -460,8 +490,8 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
             line = st.empty()
             while thread.is_alive():
                 seconds = int(time.monotonic() - started)
-                line.markdown(f"{progress_label(run_entries(read_log(), ss.run_id))}  \n"
-                              f":gray[{seconds} s · runs on {settings.provider} `{settings.model_name()}`]")
+                location = str(((run_state(ss.run_id) or {}).get("brief") or {}).get("location") or "")
+                line.markdown(f"{progress_label(run_entries(read_log(), ss.run_id), location)}  \n:gray[{seconds} s]")
                 thread.join(timeout=1.0)
             if "error" in box:
                 status.update(label=f"{label}: failed", state="error")
@@ -483,16 +513,11 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
             ss.result = box.get("result")
         st.rerun()
 
-    # ---- sidebar: run, model, cost
+    # ---- sidebar: only what the founder needs; developer details live in "Details for reviewers"
     with st.sidebar:
-        st.header("Run")
-        if ss.run_id:
-            st.code(ss.run_id, language=None)
-            if st.button("Start a new brief"):
-                ss.run_id, ss.result, ss.error, ss.model_error = None, None, None, False
-                st.rerun()
-        else:
-            st.caption("No run yet. Fill in the brief to start one.")
+        if ss.run_id and st.button("Start a new brief", type="primary"):
+            ss.run_id, ss.result, ss.error, ss.model_error = None, None, None, False
+            st.rerun()
         with st.expander("Open an earlier run"):
             earlier = st.text_input("Run id", key="earlier_run_id")
             if st.button("Open", disabled=not earlier.strip()):
@@ -502,24 +527,16 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
                 else:
                     ss.run_id, ss.result, ss.error = earlier.strip(), loaded, None
                     st.rerun()
-
-        st.header("Model")
-        st.write(f"Provider: `{settings.provider}` · model: `{settings.model_name()}`")
-
-        if ss.run_id:
-            usage = run_usage(run_entries(read_log(), ss.run_id))
-            st.header("This run")
-            col1, col2 = st.columns(2)
-            col1.metric("Tokens", f"{usage['tokens']:,}")
-            col2.metric("Cost (USD)", f"${usage['cost']:.2f}")
-            budget = getattr(_orchestrator(), "TOKEN_BUDGET", None)
-            st.caption((f"Budget {budget:,} tokens per run. " if budget else "")
-                       + f"Counted from {usage['entries']} entries in decision_log.json.")
+        with st.expander("Demo setting"):
+            ss.stop_after = st.selectbox(
+                "Stop the demo after Phase", [1, 2, 3, 4, 5, 6], index=[1, 2, 3, 4, 5, 6].index(ss.stop_after),
+                help="GO at the last gate of this phase is not sent, so a live demo can't start the next phase. "
+                     "6 means no limit.")
 
     st.title("Agentic Venture Builder")
     st.caption("Your idea is checked against rated sources and scored on a fixed rubric. "
                "The system recommends; you decide at every gate.")
-    render_phase_strip(st, ss.result or {})
+    render_stepper(st, ss.result or {}, run_state(ss.run_id) if ss.run_id else {})
 
     # The app never waits for the model: if it isn't ready yet, say why and how to check.
     status = cached_model_status(ss)
@@ -571,40 +588,12 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
 
     # ---- paused for questions
     if result.get("awaiting_founder") and result.get("kind") == "questions":
-        stage = result.get("stage", "intake")
-        if stage == "intake":
-            st.subheader("A few questions before the research")
-            st.caption("Your answers feed the founder-fit and feasibility scores. Leave a question blank to skip it.")
-        else:
-            st.subheader(f"Coach: questions after {str(result.get('outcome', '')).upper()}")
-            last = (state.get("founder_decisions") or [{}])[-1]
-            last_gate = (state.get("gate_results") or [{}])[-1]
-            if last:
-                st.markdown(f"At {gate_label(last.get('gate'))} the system recommended "
-                            f"**{str(last_gate.get('recommendation', '?')).upper()}** and you chose "
-                            f"**{str(last.get('outcome', '?')).upper()}**"
-                            + (f" (note: {last['note']})" if last.get("note") else "") + ".")
-            st.caption("The coach asks what would close the evidence gap. Your answers go into the next research round "
-                       f"(round {state.get('round', 1) + 1}).")
-        accept = False
-        rnd = state.get("round", 1)
-        with st.form(f"questions_{stage}_{rnd}"):
-            if result.get("needs_accept_revised_idea") and result.get("revised_idea"):
-                st.info(f"Proposed revised idea: {result['revised_idea']}")
-                accept = st.checkbox("Use this revised idea for the next round")
-            answers = {q["field"]: st.text_area(q["question"], key=f"q_{stage}_{rnd}_{q['field']}")
-                       for q in result.get("questions", [])}
-            send = st.form_submit_button("Send answers and start the research" if stage == "intake" else "Send answers",
-                                         type="primary")
-        if send:
-            reply: dict[str, Any] = {"answers": {k: v for k, v in answers.items() if v.strip()}}
-            if result.get("needs_accept_revised_idea"):
-                reply["accept_revised_idea"] = accept
-            call("Researching your idea", _orchestrator().resume_run, ss.run_id, reply)
+        render_questions(st, result, state, call, ss.run_id)
 
     # ---- paused at a gate: the recommendation first, the evidence under it
     elif result.get("awaiting_founder") and result.get("kind") == "gate":
-        render_gate_card(st, result, call, key=f"{result.get('gate')}_{len(state.get('gate_results') or [])}")
+        render_gate_card(st, result, call, key=f"{result.get('gate')}_{len(state.get('gate_results') or [])}",
+                         state=state, stop_after=ss.stop_after)
         render_evidence(st, state)
 
     # ---- a step failed mid-run
@@ -630,9 +619,7 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
     if not asking:
         focus = int(result.get("phase") or 1) if result.get("kind") == "gate" else None
         render_phases(st, state, focus=focus)  # Phases 2-6, with the MOCKED sale to cash in Phase 5
-    if not finished:
-        render_outputs(st, ss.run_id)  # the finished screen lists this run's files itself
-    render_log(st, ss.run_id)
+    render_details(st, ss.run_id, finished=finished)
 
 
 def render_model_wait(st, status: dict[str, Any]) -> None:  # pragma: no cover - UI
@@ -685,14 +672,24 @@ def render_evidence(st, state: dict[str, Any]) -> None:  # pragma: no cover - UI
             else:
                 st.info("No claims yet. They appear here once the research step has run.")
         else:
-            st.caption("Every source is rated A–D by fixed domain rules (rule: unknown -> B). "
-                       "Tier D is a community signal only, never a number. ASSUMPTION means no source was found.")
+            plan = search_plan(state)
+            if plan:
+                with st.expander("What I searched and why"):
+                    for group in plan:
+                        st.markdown(f"**{group['evidence_type'].replace('_', ' ').capitalize()}**")
+                        st.markdown("\n".join(
+                            f"- {s['name']}: “{s['query']}”" + (f" — {s['why']}" if s["why"] else "")
+                            for s in group["searches"]))
+            st.badge("How sources are rated", icon="ℹ️", color="gray", help=TIER_HELP)
+            st.caption("Rated A–D by fixed domain rules (rule: unknown -> B). Community signals are lighter: "
+                       "a sign of pain or demand, never a number.")
+            ids = {id(c): cid for cid, c in claim_index(state).items()}
             areas: dict[str, list[dict[str, Any]]] = {}
             for c in claims:
                 areas.setdefault(str(c.get("area") or "other"), []).append(c)
             for area, items in areas.items():
                 with st.expander(f"{area.replace('_', ' ')} ({len(items)})", expanded=True):
-                    st.markdown("\n".join(f"- {claim_line(c)}" for c in items))
+                    st.markdown("\n".join(f"- {claim_line(c, ids.get(id(c), ''))}" for c in items))
     with tab_checks:
         if not checks:
             st.info("No statements checked yet. The skeptic checks what you claimed in your brief once research has run.")
@@ -719,47 +716,251 @@ def render_evidence(st, state: dict[str, Any]) -> None:  # pragma: no cover - UI
                        "(gates.py). Weights and cut-offs are our own design choices (rubric.yaml).")
 
 
-def render_gate_card(st, gate: dict[str, Any], call, key: str) -> None:  # pragma: no cover - UI
+# ---------------------------------------------------------------- founder-first helpers (tested)
+
+STEPS = [
+    (1, "Discover", "I'm checking whether real people have this problem, and who already solves it."),
+    (2, "Validate", "I'm drafting a Lean Canvas and a waitlist page, so you can test demand with real people."),
+    (3, "Build", "I'm proposing how to build the first version, then building the landing page, product and docs."),
+    (4, "Commercial", "I'm drafting pricing with its basis, your policies and a marketing plan."),
+    (5, "Launch", "I'm drafting the launch plan and store page; selling runs on MOCKED payments only."),
+    (6, "Learn", "I'm reading the results against the targets you set, to recommend persevere or pivot."),
+]
+TIER_HELP = ("A: official (government, World Bank, regulators) · B: the company's or author's own page · "
+             "C: established news or research firms · D: forums and social media, a signal only, never a number · "
+             "No source found: an ASSUMPTION")
+VERDICT_COLORS = OUTCOME_COLORS
+
+
+def normalize_question(q: dict[str, Any]) -> dict[str, Any]:
+    """Old {field, question} and new {id, text, why, suggestions, choices} questions in one shape."""
+    choices = q.get("choices")
+    return {
+        "id": str(q.get("id") or q.get("field") or ""),
+        "text": str(q.get("text") or q.get("question") or ""),
+        "why": str(q.get("why") or ""),
+        "suggestions": [str(s) for s in (q.get("suggestions") or []) if str(s).strip()],
+        "choices": [str(c) for c in choices] if isinstance(choices, list) and choices else None,
+    }
+
+
+def claim_index(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Claims by id ("C3"). Claims without an id get C1, C2, ... in order."""
+    index = {}
+    for i, claim in enumerate(current_claims(state), start=1):
+        index[str(claim.get("id") or f"C{i}")] = claim
+    return index
+
+
+def cite(ids: Any, index: dict[str, dict[str, Any]]) -> str:
+    """[C3]-style citations: each opens its source in a new tab, or says no source was found."""
+    out = []
+    for cid in ids or []:
+        claim = index.get(str(cid))
+        if claim and claim.get("support") == "url" and claim.get("url"):
+            out.append(f"[[{cid}]]({claim['url']} \"Tier {claim.get('tier', '?')}: {str(claim.get('text', ''))[:80]}\")")
+        else:
+            out.append(f"[{cid}: no source found]")
+    return " ".join(out)
+
+
+def founder_decision(action: str, recommendation: str, other: Optional[str] = None) -> tuple[bool, Optional[str]]:
+    """(approved, outcome) for the founder's action. Request changes = outcome repeat (+ a note)."""
+    if action == "approve":
+        return True, recommendation
+    if action == "reject":
+        return False, other
+    if action == "changes":
+        return recommendation == "repeat", "repeat"
+    raise ValueError(f"unknown action {action!r}")
+
+
+def blocked_by_demo_limit(gate: dict[str, Any], outcome: Optional[str], stop_after: int) -> bool:
+    """True when GO would start a phase after the demo limit (Gate 1's go stays in Phase 1)."""
+    return (outcome == "go" and str(gate.get("gate")) != "gate_1"
+            and int(gate.get("phase") or 1) >= int(stop_after))
+
+
+def current_step(result: dict[str, Any], state: dict[str, Any]) -> int:
+    phase = result.get("phase") if result.get("kind") == "gate" else None
+    return int(phase or state.get("current_phase") or result.get("current_phase") or 1)
+
+
+# ---------------------------------------------------------------- founder-first UI
+
+def render_stepper(st, result: dict[str, Any], state: dict[str, Any]) -> None:  # pragma: no cover - UI
+    """Discover -> Validate -> Build -> Commercial -> Launch -> Learn, the current step first in words."""
+    step = current_step(result, state) if result else 1
+    statuses = {n: s for n, _name, s, _note in PHASES}
+    parts = []
+    for number, name, _sentence in STEPS:
+        label = f"**{name}**" if number == step else f":gray[{name}]"
+        mark = "●" if number == step else ("✓" if number < step and result else "○")
+        badge = "" if number == 1 else f" :{'violet' if statuses.get(number) == 'MOCKED' else 'gray'}-badge[{statuses.get(number, '')}]"
+        parts.append(f"{mark} {label}{badge}")
+    st.markdown(" → ".join(parts))
+    st.caption(STEPS[step - 1][2] + "  ·  MOCKED: fake data only, no real money. STUBBED: not running in this version.")
+
+
+def render_questions(st, result: dict[str, Any], state: dict[str, Any], call, run_id: str) -> None:  # pragma: no cover - UI
+    """Discovery: what I understood, then one card per question with why, suggestion chips and choices."""
+    stage = str(result.get("stage", "intake"))
+    rnd = state.get("round", 1)
+    if stage == "intake":
+        st.subheader("Before I research, a few questions")
+    elif stage == "gate_2_targets":
+        st.subheader("Your waitlist test")
+        st.caption("Targets are yours, set before the test. I never estimate or invent a sign-up count.")
+    else:
+        st.subheader(f"Questions after {str(result.get('outcome', '')).upper()}")
+        last = (state.get("founder_decisions") or [{}])[-1]
+        last_gate = (state.get("gate_results") or [{}])[-1]
+        if last:
+            st.markdown(f"At {gate_label(last.get('gate'))} I recommended **{str(last_gate.get('recommendation', '?')).upper()}** "
+                        f"and you chose **{str(last.get('outcome', '?')).upper()}**"
+                        + (f" (your note: {last['note']})" if last.get("note") else "") + ".")
+
+    summary = result.get("summary")
+    if summary:
+        with st.container(border=True):
+            st.markdown("**Here's what I understood**")
+            if isinstance(summary, dict):
+                st.markdown(str(summary.get("text") or summary.get("understood") or ""))
+                assumptions = summary.get("assumptions") or []
+                if assumptions:
+                    st.markdown("**What I'm assuming** (correct me below):")
+                    st.markdown("\n".join(f"- {a}" for a in assumptions))
+            else:
+                st.markdown(str(summary))
+
+    if result.get("needs_accept_revised_idea") and result.get("revised_idea"):
+        st.info(f"Proposed revised idea: {result['revised_idea']}")
+        st.checkbox("Use this revised idea for the next round", key=f"accept_{stage}_{rnd}")
+
+    answers: dict[str, str] = {}
+    for raw in result.get("questions", []):
+        q = normalize_question(raw)
+        key = f"q_{stage}_{rnd}_{q['id']}"
+        with st.container(border=True):
+            st.markdown(f"**{q['text']}**")
+            if q["why"]:
+                st.caption(f"Why I ask: {q['why']}")
+            if q["choices"]:
+                answers[q["id"]] = st.radio(q["text"], q["choices"], index=None, key=key,
+                                            label_visibility="collapsed") or ""
+            else:
+                if q["suggestions"]:
+                    row = st.container(horizontal=True)
+                    for i, s in enumerate(q["suggestions"]):
+                        row.button(s, key=f"{key}_chip{i}", on_click=_fill, args=(st.session_state, key, s))
+                answers[q["id"]] = st.text_area(q["text"], key=key, label_visibility="collapsed",
+                                                placeholder="Type here, or click a suggestion")
+    label = "Send and start the research" if stage == "intake" else "Send answers"
+    if st.button(label, type="primary", key=f"send_{stage}_{rnd}"):
+        reply: dict[str, Any] = {"answers": {k: v for k, v in answers.items() if str(v).strip()}}
+        if result.get("needs_accept_revised_idea"):
+            reply["accept_revised_idea"] = bool(st.session_state.get(f"accept_{stage}_{rnd}"))
+        call("Researching your idea" if stage != "gate_2_targets" else "Continuing", _orchestrator().resume_run,
+             run_id, reply)
+
+
+def _fill(store: Any, key: str, value: str) -> None:
+    store[key] = value
+
+
+def render_memo(st, gate: dict[str, Any], state: dict[str, Any]) -> None:  # pragma: no cover - UI
+    """The evaluation: verdict, headline, cited why, per-criterion cards, unknowns and next steps."""
+    memo = gate.get("memo") if isinstance(gate.get("memo"), dict) else {}
+    index = claim_index(state)
+    rec = str(memo.get("verdict") or gate.get("recommendation") or "")
+    phase = int(gate.get("phase") or 1)
+    name = gate_label(gate.get("gate")) + (f" ({PHASE_NAMES.get(phase, '')})" if phase > 1 else "")
+    st.markdown(f"## :{VERDICT_COLORS.get(rec, 'gray')}-badge[{rec.upper()}] &nbsp;{name}")
+    if memo.get("headline"):
+        st.markdown(f"### {memo['headline']}")
+    score = gate.get("score")
+    if isinstance(score, (int, float)):
+        st.caption(f"Weighted score {score:.2f} / 4" + cutoffs_text())
+
+    why = memo.get("why") or []
+    st.markdown("**Why**")
+    if why:
+        st.markdown("\n".join(f"- {friendly(w.get('text', ''))} {cite(w.get('claim_ids'), index)}"
+                              for w in why if isinstance(w, dict)))
+    else:
+        st.markdown("\n".join(f"- {friendly(r)}" for r in gate.get("reasons", [])) or "_No reasons given._")
+
+    criteria = [c for c in memo.get("per_criterion") or [] if isinstance(c, dict)]
+    if criteria:
+        st.markdown("**Each criterion**")
+        cols = st.columns(2)
+        for i, c in enumerate(criteria):
+            with cols[i % 2].container(border=True):
+                value = float(c.get("score") or 0)
+                st.markdown(f"**{str(c.get('criterion', '')).replace('_', ' ').capitalize()}** · {value:g} / 4")
+                st.progress(min(max(value / 4, 0.0), 1.0))
+                if c.get("explanation"):
+                    st.markdown(f"{c['explanation']} {cite(c.get('claim_ids'), index)}")
+                if c.get("counter_evidence"):
+                    st.markdown(f":orange[Against:] {c['counter_evidence']}")
+                if c.get("what_would_change"):
+                    st.caption(f"What would change this score: {c['what_would_change']}")
+
+    unknowns, steps = memo.get("unknowns") or [], memo.get("next_steps") or []
+    if unknowns or steps:
+        left, right = st.columns(2)
+        with left:
+            st.markdown("**What we don't know yet**")
+            st.markdown("\n".join(f"- {u}" for u in unknowns) or "_Nothing listed._")
+        with right:
+            st.markdown("**What to do next**")
+            st.markdown("\n".join(f"{i}. {s}" for i, s in enumerate(steps, 1)) or "_Nothing listed._")
+    with st.expander("The target set before this phase"):
+        st.markdown(f"**Target:** {gate.get('target', '')}")
+        if gate.get("evidence_summary"):
+            st.markdown(f"**Evidence:** {gate['evidence_summary']}")
+
+
+def render_gate_card(st, gate: dict[str, Any], call, key: str, state: Optional[dict[str, Any]] = None,
+                     stop_after: int = 6) -> None:  # pragma: no cover - UI
+    """The evaluation, then the founder's three actions. Nothing moves on until the founder chooses."""
     from approval import record_decision
 
+    state = state or {}
     rec = str(gate.get("recommendation"))
-    name = gate_label(gate.get("gate"))
-    phase = int(gate.get("phase") or 1)
-    if phase > 1:
-        name += f" ({PHASE_NAMES.get(phase, f'Phase {phase}')})"
     with st.container(border=True):
-        score = gate.get("score")
-        score_text = f" · weighted score {score:.2f} / 4" if isinstance(score, (int, float)) else ""
-        st.markdown(f"## {name} recommends :{OUTCOME_COLORS.get(rec, 'gray')}[**{rec.upper()}**]")
-        if score_text:
-            st.caption(score_text.strip(" ·").capitalize() + cutoffs_text())
-        st.markdown("\n".join(f"- {friendly(r)}" for r in gate.get("reasons", [])) or "_No reasons given._")
-        with st.expander("Target set before the phase, and the evidence behind it"):
-            st.markdown(f"**Target:** {gate.get('target', '')}")
-            if gate.get("evidence_summary"):
-                st.markdown(f"**Evidence:** {gate['evidence_summary']}")
-
+        render_memo(st, gate, state)
+        st.divider()
         st.markdown("**Your decision.** Nothing moves on until you choose.")
-        choice = st.radio(
-            "Decision", ["approve", "reject"], index=None, horizontal=True, key=f"choice_{key}",
-            format_func=lambda c: f"Approve: {rec.upper()}" if c == "approve" else "Reject and choose another outcome",
+        action = st.radio(
+            "Decision", ["approve", "reject", "changes"], index=None, horizontal=True, key=f"choice_{key}",
+            format_func=lambda a: {"approve": f"Approve: {rec.upper()}", "reject": "Reject and choose another outcome",
+                                   "changes": "Request changes"}[a],
             label_visibility="collapsed",
         )
-        outcome: Optional[str] = rec if choice == "approve" else None
-        if choice == "reject":
-            outcome = st.selectbox("Outcome instead", [o for o in OUTCOMES if o != rec], index=None,
-                                   format_func=str.upper, key=f"outcome_{key}")
-            if rec == "stop" and outcome:
-                st.warning("You are overriding a STOP recommendation. This is recorded in decision_log.json and the gate file.")
-        note = st.text_input("Note (optional)", key=f"note_{key}")
-        if st.button("Record my decision", type="primary", disabled=choice is None or outcome is None):
+        other = None
+        if action == "reject":
+            other = st.selectbox("Outcome instead", [o for o in OUTCOMES if o != rec], index=None,
+                                 format_func=str.upper, key=f"outcome_{key}")
+            if rec == "stop" and other:
+                st.warning("You are overriding a STOP recommendation. This is recorded in the log and the gate file.")
+        note = st.text_area("What should change?" if action == "changes" else "Note (optional)", key=f"note_{key}")
+        approved, outcome = founder_decision(action, rec, other) if action else (None, None)
+        needs_note = action == "changes" and not note.strip()
+        if needs_note:
+            st.caption("Request changes needs a note: say what should change.")
+        limited = blocked_by_demo_limit(gate, outcome, stop_after)
+        if limited:
+            st.info(f"Demo setting: the run stops after Phase {stop_after}, so GO here is not sent. "
+                    "The run stays paused at this gate; open it later to continue.")
+        if st.button("Record my decision", type="primary", key=f"record_{key}",
+                     disabled=action is None or outcome is None or needs_note or limited):
             run_id = gate.get("run_id") or st.session_state.run_id
 
             def decide_and_resume():
-                decision = record_decision(run_id, gate, approved=choice == "approve", outcome=outcome, note=note)
+                decision = record_decision(run_id, gate, approved=approved, outcome=outcome, note=note)
                 # Sent as a dict: resume_run rebuilds it with its own FounderDecision class. Streamlit
-                # can reload project modules between reruns, and then two copies of the class exist,
-                # so an isinstance check on the object itself would wrongly refuse the decision.
+                # can reload project modules between reruns, and then two copies of the class exist.
                 return _orchestrator().resume_run(run_id, decision.model_dump())
 
             call("Recording your decision", decide_and_resume)
@@ -845,19 +1046,22 @@ def render_sale_to_cash(st) -> None:  # pragma: no cover - UI
 
 
 def render_finished(st, result: dict[str, Any], state: dict[str, Any], run_id: str) -> None:  # pragma: no cover - UI
-    """The finished run: outcome, every gate decision, tokens and cost, and every output file."""
-    entries = run_entries(read_log(), run_id)
-    usage = run_usage(entries)
+    """A summary for the founder: where the run ended, every decision, and what to do next.
+
+    Tokens, cost, files and the log are in "Details for reviewers".
+    """
     phase = int(result.get("current_phase") or 1)
+    idea = str((state.get("brief") or {}).get("idea") or "your idea")
     if result.get("stopped"):
-        st.error(f"## Run stopped\n{friendly(result.get('stop_reason', ''))}")
+        st.error(f"## We stopped here\n{friendly(result.get('stop_reason', ''))}")
+        st.markdown(f"For **{idea}**, the evidence didn't justify going on. That is a useful result: "
+                    "nothing was built or spent, and you know what was missing.")
     else:
         nxt = PHASE_NAMES.get(phase)
-        st.success(f"## Run finished\nThe founder approved go at the last gate."
-                   + (f" Next: Phase {phase}, {nxt}." if nxt else ""))
+        st.success("## Done for now\nYou approved GO at the last gate." + (f" Next: Phase {phase}, {nxt}." if nxt else ""))
 
     rows = decision_rows(state)
-    st.markdown("### Every gate decision")
+    st.markdown("### Your decisions")
     if not rows:
         st.caption("The run ended before any gate (for example, a banned product category).")
     else:
@@ -873,28 +1077,37 @@ def render_finished(st, result: dict[str, Any], state: dict[str, Any], run_id: s
         st.markdown("\n".join(table))
         st.caption("Each decision is in decision_log.json with approved_by: founder.")
 
-    cols = st.columns(3)
-    cols[0].metric("Model tokens, whole run", f"{usage['tokens']:,}")
-    cols[1].metric("Cost (USD)", f"${usage['cost']:.2f}")
-    cols[2].metric("Log entries", usage["entries"])
-    if usage["models"]:
-        st.caption("Models used: " + ", ".join(f"`{m}`" for m in usage["models"]))
-
     if state.get("subdomain"):
-        st.markdown(f"**Niche:** {state['subdomain']}")
+        st.markdown(f"**Your niche:** {state['subdomain']}")
     if state.get("interview_kit"):
-        st.markdown("**Interview kit (ask real people about past behaviour):**")
+        st.markdown("### Before anything else: talk to real people")
+        st.markdown("Ask about what they did, not what they would do:")
         st.markdown("\n".join(f"- {q}" for q in state["interview_kit"]))
 
-    files = run_output_files(entries)
-    st.markdown(f"### Output files of this run ({len(files)})")
-    if not files:
-        st.caption("No output files were written in this run.")
-    for path in files:
-        with st.expander(f"`outputs/{path.name}`"):
-            show_file(st, path, "finished")
-
     render_evidence(st, state)
+
+
+def render_details(st, run_id: Optional[str], finished: bool = False) -> None:  # pragma: no cover - UI
+    """Everything a reviewer wants and a founder doesn't: run id, model, tokens, files, the log."""
+    with st.expander("Details for reviewers"):
+        st.markdown(f"**Model:** `{settings.provider}` · `{settings.model_name()}`"
+                    + (f" (fast: `{settings.model_name('fast')}`)" if settings.model_name("fast") != settings.model_name() else ""))
+        if not run_id:
+            st.caption("No run yet.")
+            render_outputs(st, None)
+            return
+        entries = run_entries(read_log(), run_id)
+        usage = run_usage(entries)
+        st.markdown(f"**Run id:** `{run_id}`")
+        cols = st.columns(3)
+        cols[0].metric("Model tokens", f"{usage['tokens']:,}")
+        cols[1].metric("Cost (USD)", f"${usage['cost']:.2f}")
+        cols[2].metric("Log entries", usage["entries"])
+        budget = getattr(_orchestrator(), "TOKEN_BUDGET", None)
+        st.caption((f"Budget {budget:,} tokens per run. " if budget else "")
+                   + "Counted from decision_log.json" + (f"; models: {', '.join(usage['models'])}." if usage["models"] else "."))
+        render_outputs(st, run_id)
+        render_log(st, run_id)
 
 
 def render_log(st, run_id: Optional[str]) -> None:  # pragma: no cover - UI
