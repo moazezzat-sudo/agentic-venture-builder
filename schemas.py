@@ -28,6 +28,29 @@ BANNED_CATEGORIES = (
 )
 
 
+EVIDENCE_TYPES = ("pain", "competitors", "pricing", "market", "regulation")
+# The rubric criterion each evidence type is evidence for.
+EVIDENCE_CRITERION = {"pain": "problem_evidence", "competitors": "competition", "pricing": "willingness_to_pay",
+                      "market": "market", "regulation": "rules_risk"}
+
+
+def add_claims(old: Optional[list[dict[str, Any]]], new: Optional[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    """LangGraph reducer for claims: append, giving each new claim without an id the next "C<n>".
+
+    Parallel researchers' updates are applied one after another, so ids never collide.
+    """
+    out = list(old or [])
+    used = [int(c["id"][1:]) for c in out if str(c.get("id", "")).startswith("C") and str(c["id"])[1:].isdigit()]
+    next_id = max(used, default=0) + 1
+    for claim in new or []:
+        claim = dict(claim)
+        if not claim.get("id"):
+            claim["id"] = f"C{next_id}"
+            next_id += 1
+        out.append(claim)
+    return out
+
+
 def merge_dicts(old: Optional[dict[str, Any]], new: Optional[dict[str, Any]]) -> dict[str, Any]:
     """LangGraph reducer: a node's dict update adds or replaces keys instead of replacing the whole dict."""
     return {**(old or {}), **(new or {})}
@@ -119,7 +142,7 @@ class Briefcase(TypedDict, total=False):
     domain_weights: dict[str, float]
     innovation_type: str
     subdomain: str
-    claims: Annotated[list[dict[str, Any]], operator.add]
+    claims: Annotated[list[dict[str, Any]], add_claims]  # each gets an id "C1", "C2", ... on arrival
     claim_checks: list[dict[str, Any]]
     scores: dict[str, float]
     gate_results: Annotated[list[dict[str, Any]], operator.add]
@@ -146,3 +169,8 @@ class Briefcase(TypedDict, total=False):
     drafts: Annotated[dict[str, Any], merge_dicts]
     targets: dict[str, Any]  # the founder's, set at Gate 2: waitlist_target, waitlist_count, paid_orders
     phase_repeats: dict[str, int]  # repeats chosen per gate, to cap repeat loops
+    # Phase 1 discovery conversation (agents/discovery.py): summary, assumptions, questions, answers, confirmed.
+    discovery: dict[str, Any]
+    search_plan: list[dict[str, Any]]  # [{evidence_type, query, why}] from agents/search_plan.py
+    scoring_incomplete: list[str]  # criteria the scorer did not return: the gate recommends repeat
+    score_claims: dict[str, list[str]]  # criterion -> claim ids the score rests on
