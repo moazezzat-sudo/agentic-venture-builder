@@ -37,11 +37,11 @@ TIER_LABELS = {
 # Later phases as the README table states them. Keep the two in line.
 PHASES: list[tuple[int, str, str, str]] = [
     (1, "Discover", "", "This app runs it; parts still STUBBED are listed per run."),
-    (2, "Validate", "STUBBED", "Lean Canvas and landing-page copy are not built yet."),
-    (3, "Build", "STUBBED", "Product, UI/UX and MVP-plan proposals are not built yet."),
-    (4, "Commercial setup", "STUBBED", "Pricing and draft policies are not built yet."),
+    (2, "Validate", "STUBBED", "Lean Canvas and landing-page copy: drafts built and tested, not wired into the graph yet."),
+    (3, "Build", "STUBBED", "Product, UI/UX and MVP-plan proposals: drafts built and tested, not wired into the graph yet."),
+    (4, "Commercial setup", "STUBBED", "Pricing and draft policies: drafts built and tested, not wired into the graph yet."),
     (5, "Sell/deliver/get paid", "MOCKED", "Fake in-memory payment events: no payment provider, no sandbox, no real money."),
-    (6, "Operate and learn", "STUBBED", "Metrics and the persevere-or-pivot memo are not built yet."),
+    (6, "Operate and learn", "STUBBED", "Metrics and the persevere-or-pivot memo: drafts built and tested, not wired into the graph yet."),
 ]
 
 BRIEF_LIST_FIELDS = ("skills", "learned", "values", "team_skills")
@@ -294,6 +294,71 @@ def model_hint(exc: BaseException) -> str:
         return (f" The local model is not reachable at {settings.ollama_base_url}. Start Ollama with "
                 f"`{settings.ollama_model}` pulled (docker compose up does both), or put a free GROQ_API_KEY in .env.")
     return " The model provider is not reachable; check the network and the key in .env."
+
+
+PHASE_NAMES = {number: name for number, name, _status, _note in PHASES}
+STATUS_COLORS = {"Working": "green", "MOCKED": "violet", "STUBBED": "orange"}
+
+
+def status_badge(status: Any) -> str:
+    """Markdown badge for a status label set by an agent (Working / MOCKED / STUBBED)."""
+    text = str(status or "STUBBED")
+    return f":{STATUS_COLORS.get(text, 'gray')}-badge[{text}]"
+
+
+def drafts_by_phase(state: dict[str, Any]) -> dict[int, list[tuple[str, dict[str, Any]]]]:
+    """The Phase 2-6 drafts in the run state, grouped by phase: {2: [("phase2_lean_canvas", {...})], ...}.
+
+    Agents are named phase<N>_<what> and put their draft under state["drafts"][<agent>].
+    """
+    out: dict[int, list[tuple[str, dict[str, Any]]]] = {}
+    for agent, draft in (state.get("drafts") or {}).items():
+        match = re.match(r"^phase(\d+)_", str(agent))
+        if match and isinstance(draft, dict):
+            out.setdefault(int(match.group(1)), []).append((agent, draft))
+    return dict(sorted(out.items()))
+
+
+def decision_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every gate the run passed, in order: what the system recommended and what the founder chose.
+
+    A gate still waiting for the founder has founder=None.
+    """
+    decisions = list(state.get("founder_decisions") or [])
+    rows = []
+    for gate in state.get("gate_results") or []:
+        decision = decisions.pop(0) if decisions and decisions[0].get("gate") == gate.get("gate") else None
+        rows.append({
+            "gate": gate.get("gate"), "phase": gate.get("phase"), "recommendation": gate.get("recommendation"),
+            "score": gate.get("score"),
+            "founder": None if decision is None else {
+                "approved": decision.get("approved"), "outcome": decision.get("outcome"),
+                "note": decision.get("note") or "",
+                "overrides": decision.get("outcome") != gate.get("recommendation"),
+            },
+        })
+    return rows
+
+
+def run_started_at(entries: list[dict[str, Any]]) -> Optional[datetime]:
+    """When the run started, from its start_run entry in decision_log.json."""
+    for e in entries:
+        if e.get("action") == "start_run" and e.get("timestamp"):
+            try:
+                return datetime.strptime(e["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            except ValueError:
+                return None
+    return None
+
+
+def run_output_files(entries: list[dict[str, Any]], folder: Optional[Path] = None) -> list[Path]:
+    """Output files written since this run started (outputs/ is shared, so older files are left out)."""
+    started = run_started_at(entries)
+    files = output_files(folder)
+    if started is None:
+        return files
+    cutoff = started.timestamp() - 1
+    return [p for p in files if p.stat().st_mtime >= cutoff]
 
 
 def output_files(folder: Optional[Path] = None) -> list[Path]:
@@ -558,24 +623,15 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
 
     # ---- finished
     elif result:
-        if result.get("stopped"):
-            st.error(f"**Run stopped.** {friendly(result.get('stop_reason', ''))}")
-        else:
-            st.success(f"**Phase 1 finished.** Next: Phase {result.get('current_phase', 2)}, Validate (STUBBED in this version).")
-        if state.get("subdomain"):
-            st.markdown(f"**Niche:** {state['subdomain']}")
-        if state.get("interview_kit"):
-            st.markdown("**Interview kit (ask real people about past behaviour):**")
-            st.markdown("\n".join(f"- {q}" for q in state["interview_kit"]))
-        decisions = state.get("founder_decisions") or []
-        if decisions:
-            st.markdown("**Your decisions:** " + "; ".join(
-                f"{gate_label(d.get('gate'))}: you {'approved' if d.get('approved') else 'rejected'} the recommendation → "
-                f"{str(d.get('outcome')).upper()}"
-                + (f" ({d['note']})" if d.get("note") else "") for d in decisions))
-        render_evidence(st, state)
+        render_finished(st, result, state, ss.run_id)
 
-    render_outputs(st)
+    asking = bool(result.get("awaiting_founder")) and result.get("kind") == "questions"
+    finished = bool(result) and not result.get("awaiting_founder") and not run_interrupted(result)
+    if not asking:
+        focus = int(result.get("phase") or 1) if result.get("kind") == "gate" else None
+        render_phases(st, state, focus=focus)  # Phases 2-6, with the MOCKED sale to cash in Phase 5
+    if not finished:
+        render_outputs(st, ss.run_id)  # the finished screen lists this run's files itself
     render_log(st, ss.run_id)
 
 
@@ -608,7 +664,7 @@ def render_phase_strip(st, result: dict[str, Any]) -> None:  # pragma: no cover 
             badge = f":{'violet' if status == 'MOCKED' else 'orange'}-badge[{status}]"
         chips.append(f"**{number}. {name}** {badge}")
     st.markdown(" &nbsp;·&nbsp; ".join(chips))
-    st.caption("LIVE: runs on this page. STUBBED: not built yet, nothing runs. "
+    st.caption("LIVE: runs on this page. STUBBED: does not run in this app yet (drafts may exist, nothing is wired). "
                "MOCKED: runs on fake data only (no payment provider, no real money).")
 
 
@@ -668,6 +724,9 @@ def render_gate_card(st, gate: dict[str, Any], call, key: str) -> None:  # pragm
 
     rec = str(gate.get("recommendation"))
     name = gate_label(gate.get("gate"))
+    phase = int(gate.get("phase") or 1)
+    if phase > 1:
+        name += f" ({PHASE_NAMES.get(phase, f'Phase {phase}')})"
     with st.container(border=True):
         score = gate.get("score")
         score_text = f" · weighted score {score:.2f} / 4" if isinstance(score, (int, float)) else ""
@@ -706,24 +765,136 @@ def render_gate_card(st, gate: dict[str, Any], call, key: str) -> None:  # pragm
             call("Recording your decision", decide_and_resume)
 
 
-def render_outputs(st) -> None:  # pragma: no cover - UI
-    files = output_files()
-    with st.expander(f"Output files ({len(files)} in outputs/, newest first)"):
+def show_file(st, path: Path, key: str) -> None:  # pragma: no cover - UI
+    """Show one output file inline, with a download button."""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if path.suffix == ".md":
+        st.markdown(text)
+    elif path.suffix == ".json":
+        try:
+            st.json(json.loads(text))
+        except ValueError:
+            st.code(text)
+    else:
+        st.code(text, language="html" if path.suffix == ".html" else None)
+    st.download_button(f"Download {path.name}", text, file_name=path.name, key=f"dl_{key}_{path.name}")
+
+
+def render_outputs(st, run_id: Optional[str] = None) -> None:  # pragma: no cover - UI
+    """The output files of this run (or all of outputs/ when there is no run yet)."""
+    files = run_output_files(run_entries(read_log(), run_id)) if run_id else output_files()
+    title = "Output files of this run" if run_id else "Output files"
+    with st.expander(f"{title} ({len(files)}, newest first)"):
         if not files:
-            st.caption("No output files yet. Each step writes one here as it finishes.")
+            st.caption("No output files yet. Each step writes one to outputs/ as it finishes.")
             return
-        st.caption("Each step writes its file here; a later run overwrites files with the same step name.")
-        chosen = st.selectbox("File", files, format_func=lambda p: p.name)
-        text = chosen.read_text(encoding="utf-8", errors="replace")
-        if chosen.suffix == ".md":
-            st.markdown(text)
-        elif chosen.suffix == ".json":
-            try:
-                st.json(json.loads(text))
-            except ValueError:
-                st.code(text)
-        else:
-            st.code(text, language=None)
+        st.caption("Each step writes its file to outputs/; a later run overwrites files with the same step name.")
+        chosen = st.selectbox("File", files, format_func=lambda p: p.name, key="outputs_file")
+        show_file(st, chosen, "outputs")
+
+
+def render_phases(st, state: dict[str, Any], focus: Optional[int] = None) -> None:  # pragma: no cover - UI
+    """Phases 2-6: each agent's draft with the status label it set, or what the phase is waiting for."""
+    by_phase = drafts_by_phase(state)
+    st.subheader("Phases 2–6")
+    for number, name, status, note in PHASES[1:]:
+        drafts = by_phase.get(number, [])
+        statuses = sorted({str(d.get("status") or "STUBBED") for _a, d in drafts}) or [status]
+        badges = " ".join(status_badge(s) for s in statuses)
+        reached = " · draft ready" if drafts else ""
+        with st.expander(f"**{number}. {name}** {badges}{reached}", expanded=bool(drafts) and focus == number):
+            if not drafts:
+                st.caption("Not reached in this run." if state.get("drafts") else note)
+            for agent, draft in drafts:
+                st.markdown(f"**{agent.split('_', 1)[1].replace('_', ' ').capitalize()}** {status_badge(draft.get('status'))}")
+                violations = draft.get("violations") or []
+                if violations:
+                    rules = ", ".join(sorted({str(v.get("rule", v)) if isinstance(v, dict) else str(v) for v in violations}))
+                    st.warning(f"The guardrails flagged this draft ({rules}); the gate recommends repeat.")
+                claims = [c for c in draft.get("claims") or [] if isinstance(c, dict)]
+                if claims:
+                    st.markdown("\n".join(f"- {claim_line(c)}" for c in claims[:12]))
+                files = [p for p in output_files() if p.name.startswith(f"phase{number}_step")]
+                for path in files:
+                    with st.expander(f"Draft file: {path.name}"):
+                        show_file(st, path, f"phase{number}")
+            if number == 5:
+                render_sale_to_cash(st)
+
+
+def render_sale_to_cash(st) -> None:  # pragma: no cover - UI
+    """Phase 5: run payments.py's MOCKED sale to cash and show outputs/payment_test_log.md."""
+    st.markdown("**Sale to cash** :violet-badge[MOCKED]")
+    st.caption("MOCKED: fake in-memory events only. No payment provider, no sandbox, no real money, "
+               "nothing sent to anyone. It shows payment → delivery, a duplicate event ignored, "
+               "a refund revoking access, and reconciliation.")
+    if st.button("Run the mocked sale to cash", key="sale_to_cash"):
+        try:
+            from payments import run_payment_test
+
+            with st.spinner("Running the MOCKED sale to cash…"):
+                st.session_state["sale_to_cash_log"] = str(run_payment_test())
+        except Exception as exc:
+            st.error(f"The mocked sale to cash failed: {type(exc).__name__}: {exc}")
+    path = Path(st.session_state.get("sale_to_cash_log") or Path(settings.outputs_dir) / "payment_test_log.md")
+    if path.exists():
+        when = datetime.fromtimestamp(path.stat().st_mtime).strftime("%H:%M:%S")
+        with st.expander(f"MOCKED payment test log ({path.name}, written {when})",
+                         expanded="sale_to_cash_log" in st.session_state):
+            show_file(st, path, "sale")
+
+
+def render_finished(st, result: dict[str, Any], state: dict[str, Any], run_id: str) -> None:  # pragma: no cover - UI
+    """The finished run: outcome, every gate decision, tokens and cost, and every output file."""
+    entries = run_entries(read_log(), run_id)
+    usage = run_usage(entries)
+    phase = int(result.get("current_phase") or 1)
+    if result.get("stopped"):
+        st.error(f"## Run stopped\n{friendly(result.get('stop_reason', ''))}")
+    else:
+        nxt = PHASE_NAMES.get(phase)
+        st.success(f"## Run finished\nThe founder approved go at the last gate."
+                   + (f" Next: Phase {phase}, {nxt}." if nxt else ""))
+
+    rows = decision_rows(state)
+    st.markdown("### Every gate decision")
+    if not rows:
+        st.caption("The run ended before any gate (for example, a banned product category).")
+    else:
+        table = ["| Gate | System recommended | Score | Founder | Note |", "|---|---|---|---|---|"]
+        for r in rows:
+            f = r["founder"]
+            score = f"{r['score']:.2f}" if isinstance(r["score"], (int, float)) else "—"
+            founder = "_waiting_" if f is None else (
+                f"{'approved' if f['approved'] else 'rejected'} → **{str(f['outcome']).upper()}**"
+                + (" (override)" if f["overrides"] else ""))
+            note = (f["note"] if f else "").replace("|", "/")
+            table.append(f"| {gate_label(r['gate'])} | **{str(r['recommendation']).upper()}** | {score} | {founder} | {note} |")
+        st.markdown("\n".join(table))
+        st.caption("Each decision is in decision_log.json with approved_by: founder.")
+
+    cols = st.columns(3)
+    cols[0].metric("Model tokens, whole run", f"{usage['tokens']:,}")
+    cols[1].metric("Cost (USD)", f"${usage['cost']:.2f}")
+    cols[2].metric("Log entries", usage["entries"])
+    if usage["models"]:
+        st.caption("Models used: " + ", ".join(f"`{m}`" for m in usage["models"]))
+
+    if state.get("subdomain"):
+        st.markdown(f"**Niche:** {state['subdomain']}")
+    if state.get("interview_kit"):
+        st.markdown("**Interview kit (ask real people about past behaviour):**")
+        st.markdown("\n".join(f"- {q}" for q in state["interview_kit"]))
+
+    files = run_output_files(entries)
+    st.markdown(f"### Output files of this run ({len(files)})")
+    if not files:
+        st.caption("No output files were written in this run.")
+    for path in files:
+        with st.expander(f"`outputs/{path.name}`"):
+            show_file(st, path, "finished")
+
+    render_evidence(st, state)
 
 
 def render_log(st, run_id: Optional[str]) -> None:  # pragma: no cover - UI

@@ -373,3 +373,94 @@ def test_model_status_is_cached_briefly_per_session():
     assert len(calls) == 1
     app.cached_model_status(store, max_age=0, check=check)
     assert len(calls) == 2
+
+
+# ---------------------------------------------------------------- Phases 2-6, sale to cash, finished screen
+
+PHASE2_DRAFT = {
+    "status": "STUBBED", "violations": [],
+    "claims": [{"text": "Tutors pay for templates", "support": "url", "url": "https://www.etsy.com/x", "tier": "B"},
+               {"text": "Price 5 USD", "support": "ASSUMPTION", "tier": "NONE"}],
+}
+
+
+def test_drafts_by_phase_groups_agents_by_their_phase_number():
+    state = {"drafts": {"phase3_build": {"status": "Working"}, "phase2_lean_canvas": PHASE2_DRAFT,
+                        "phase3_build_plan": {"status": "STUBBED"}, "not_a_phase": {}}}
+    grouped = app.drafts_by_phase(state)
+    assert list(grouped) == [2, 3]
+    assert [a for a, _ in grouped[3]] == ["phase3_build", "phase3_build_plan"]
+    assert app.status_badge("MOCKED") == ":violet-badge[MOCKED]" and app.status_badge(None) == ":orange-badge[STUBBED]"
+
+
+def test_decision_rows_pair_each_gate_with_the_founders_answer():
+    state = {
+        "gate_results": [{"gate": "gate_1", "phase": 1, "recommendation": "stop", "score": 1.9},
+                         {"gate": "gate_1", "phase": 1, "recommendation": "go", "score": 3.0},
+                         {"gate": "gate_2", "phase": 2, "recommendation": "repeat", "score": None}],
+        "founder_decisions": [{"gate": "gate_1", "approved": False, "outcome": "repeat", "note": "one more round"},
+                              {"gate": "gate_1", "approved": True, "outcome": "go"}],
+    }
+    rows = app.decision_rows(state)
+    assert [r["recommendation"] for r in rows] == ["stop", "go", "repeat"]
+    assert rows[0]["founder"] == {"approved": False, "outcome": "repeat", "note": "one more round", "overrides": True}
+    assert rows[1]["founder"]["overrides"] is False
+    assert rows[2]["founder"] is None  # still waiting for the founder
+
+
+def test_run_output_files_leaves_out_files_from_before_the_run(tmp_path):
+    import os
+    import time
+
+    old, new = tmp_path / "phase1_step1_old.md", tmp_path / "phase1_step1_new.md"
+    old.write_text("old"), new.write_text("new")
+    os.utime(old, (time.time() - 3600, time.time() - 3600))
+    started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 60))
+    entries = [{"action": "start_run", "run_id": "r", "timestamp": started}]
+    assert [p.name for p in app.run_output_files(entries, tmp_path)] == ["phase1_step1_new.md"]
+    assert len(app.run_output_files([], tmp_path)) == 2  # no start entry: show everything
+
+
+def finished_orchestrator(calls, state):
+    mod = fake_orchestrator(calls)
+    mod.get_state = lambda run_id: dict(state, run_id=run_id, awaiting_founder=False, pending=None)
+    return mod
+
+
+def test_finished_screen_phase_panels_and_mocked_sale_to_cash(tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    test_settings = ready_settings(tmp_path)
+    use_settings(monkeypatch, test_settings)  # payments.py reads config.settings: outputs/ stays untouched
+    state = {**STATE, "stopped": True, "stop_reason": "Founder chose stop at gate_2.", "current_phase": 2,
+             "gate_results": [GATE, {**GATE, "gate": "gate_2", "phase": 2, "recommendation": "repeat", "score": None}],
+             "founder_decisions": [{"gate": "gate_1", "approved": False, "outcome": "go", "note": "40 interviews"},
+                                   {"gate": "gate_2", "approved": False, "outcome": "stop"}],
+             "drafts": {"phase2_lean_canvas": PHASE2_DRAFT}}
+    calls = []
+    monkeypatch.setitem(sys.modules, "orchestrator", finished_orchestrator(calls, state))
+    log_action(agent="orchestrator", action="start_run", run_id="done")
+    log_action(agent="scorer", action="score", run_id="done", model="m", tokens=1234, cost=0)
+    out = tmp_path / "outputs"
+    out.mkdir()
+    (out / "phase2_step1_lean_canvas.md").write_text("> **STUBBED**\n\n## Lean Canvas", encoding="utf-8")
+
+    at = AppTest.from_file(str(ROOT_DIR / "app.py"), default_timeout=30)
+    at.session_state["run_id"] = "done"
+    at.session_state["result"] = {**state, "run_id": "done", "awaiting_founder": False}
+    at.run()
+    assert not at.exception
+    page = " ".join(m.value for m in at.markdown)
+    # every gate decision, with the override and the note
+    assert "| Gate 1 | **STOP**" in page and "rejected → **GO** (override)" in page and "40 interviews" in page
+    assert "| Gate 2 | **REPEAT**" in page
+    assert any(m.label.startswith("Model tokens") and m.value == "1,234" for m in at.metric)
+    # the run's output files and the Phase 2 draft with the status its agent set
+    assert any("phase2_step1_lean_canvas.md" in e.label for e in at.expander)
+    assert any("Validate" in e.label and "STUBBED" in e.label and "draft ready" in e.label for e in at.expander)
+    assert "https://www.etsy.com/x" in page
+    # the MOCKED sale to cash runs payments.py and shows its log
+    assert "Sale to cash** :violet-badge[MOCKED]" in page
+    by_label(at.button, "Run the mocked sale to cash").click().run()
+    assert not at.exception and (out / "payment_test_log.md").exists()
+    assert any("MOCKED payment test log" in e.label for e in at.expander)
