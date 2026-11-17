@@ -292,6 +292,19 @@ __all__ = [
 ]
 
 
+def evaluate_scoring_incomplete(missing: Iterable[str], gate: str = "gate_1",
+                                rubric: Optional[Mapping[str, Any]] = None) -> GateResult:
+    """The scorer did not return every criterion: repeat, never a 0 for what is missing."""
+    missing = [m for m in missing if m]
+    g1 = (rubric or load_rubric())["gate_1"]
+    return GateResult(
+        phase=1, gate=gate, recommendation="repeat",
+        reasons=[f"Scoring incomplete: no valid score for {', '.join(missing)}. Run the scoring again; "
+                 "missing scores are never counted as 0."],
+        target=" ".join(str(g1["target"]).split()), evidence_summary="Scoring incomplete.", score=None,
+    )
+
+
 # ================================================================ Phases 2-6 gates
 # PLAN.md section 4. Each gate checks the phase's draft against the target written before the phase,
 # in plain Python. Guardrail hits left in a draft (after the agent's one rewrite) -> repeat.

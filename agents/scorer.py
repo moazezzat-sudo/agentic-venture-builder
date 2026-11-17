@@ -9,11 +9,12 @@ computed here: that is gates.py.
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 
 from agents._common import ask_json, brief_for_model, claims_markdown, cut, model_fields
 from gates import criteria_names, load_rubric, source_key
 from logger import log_action, write_output
+from schemas import EVIDENCE_CRITERION
 
 # Criteria that need research evidence; with none, the score is capped at WEAK
 # (problem_evidence at 0, since "no evidence" is 0 on the rubric scale).
@@ -67,36 +68,89 @@ def evidence_caps(claims: Iterable[dict[str, Any]]) -> dict[str, tuple[float, st
     return caps
 
 
-def clean_scores(raw_scores: Any, raw_reasons: Any, claims: list[dict[str, Any]]) -> tuple[dict[str, float], dict[str, str]]:
-    """Every criterion gets a number in 0-4. Missing or invalid -> 0 with the reason said; then evidence caps."""
+# Which evidence types can support a score above 1 on each criterion (schemas.EVIDENCE_TYPES).
+CITABLE = {"problem_evidence": ("pain",), "competition": ("competitors",),
+           "willingness_to_pay": ("pricing", "competitors"), "market": ("market",)}
+MODEL_CRITERIA = ("problem_evidence", "market", "competition", "founder_fit", "feasibility", "willingness_to_pay")
+
+
+def claim_kind(claim: dict[str, Any]) -> Optional[str]:
+    """The evidence type of a claim (older claims carry only the rubric criterion)."""
+    if claim.get("kind"):
+        return claim["kind"]
+    reverse = {v: k for k, v in EVIDENCE_CRITERION.items()}
+    return reverse.get(claim.get("area"))
+
+
+def citable(criterion: str, claim: dict[str, Any]) -> bool:
+    kind = claim_kind(claim)
+    if claim.get("support") != "url" or kind not in CITABLE.get(criterion, ()):
+        return False
+    # A competitor claim supports willingness to pay only when it states a price.
+    return not (criterion == "willingness_to_pay" and kind == "competitors" and not PRICE.search(claim.get("text", "")))
+
+
+def rules_risk(state: dict[str, Any], claims: list[dict[str, Any]]) -> tuple[float, str, list[str]]:
+    """rules_risk in Python: guardrails, not the model. Banned categories never reach scoring (category check)."""
+    from agents.search_plan import regulation_relevant
+
+    founder_hits = [v for v in state.get("text_violations") or [] if not v.get("rewritable")]
+    if founder_hits:
+        return 0.0, "A guardrail rule is broken in the founder's own answers: " + ", ".join(v["rule"] for v in founder_hits), []
+    regulation = [c["id"] for c in claims if claim_kind(c) == "regulation" and c.get("id")]
+    if regulation_relevant(state.get("brief") or {}):
+        return 3.0, "Allowed digital product in a regulated area: confirm the official rules before launch.", regulation
+    return 4.0, "Allowed digital product; no guardrail hits and no regulated activity found.", regulation
+
+
+def clean_scores(raw: Any, claims: list[dict[str, Any]], state: Optional[dict[str, Any]] = None
+                 ) -> tuple[dict[str, float], dict[str, str], dict[str, list[str]], list[str]]:
+    """Check the model's {criterion: {score, claim_ids, reasoning}} against the claims.
+
+    Returns (scores, notes, claim ids per criterion, incomplete). A criterion the model did not return
+    with a valid 0-4 score is listed in `incomplete` (the gate then recommends repeat) and gets no score:
+    a missing score is never turned into a 0.
+    """
     rubric = load_rubric()
     lo, hi = rubric["scale"]["min"], rubric["scale"]["max"]
-    raw_scores = raw_scores if isinstance(raw_scores, dict) else {}
-    raw_reasons = raw_reasons if isinstance(raw_reasons, dict) else {}
+    raw = raw if isinstance(raw, dict) else {}
+    by_id = {c.get("id"): c for c in claims if c.get("id")}
     scores: dict[str, float] = {}
     notes: dict[str, str] = {}
-    for name in criteria_names(rubric):
-        value = raw_scores.get(name)
+    cited: dict[str, list[str]] = {}
+    incomplete: list[str] = []
+    for name in MODEL_CRITERIA:
+        entry = raw.get(name) if isinstance(raw.get(name), dict) else {}
+        value = entry.get("score")
         try:
-            ok = not isinstance(value, bool) and lo <= float(value) <= hi
+            ok = not isinstance(value, bool) and value is not None and lo <= float(value) <= hi
         except (TypeError, ValueError):
             ok = False
-        if ok:
-            scores[name] = float(value)
-            notes[name] = cut(raw_reasons.get(name) or "no reason given", 200)
-        else:
-            scores[name] = 0.0
-            notes[name] = "scored 0: the model gave no valid score"
+        if not ok:
+            incomplete.append(name)
+            continue
+        ids = [str(i) for i in (entry.get("claim_ids") or []) if str(i) in by_id]
+        score, note = float(value), cut(entry.get("reasoning") or "no reasoning given", 220)
+        if name in CITABLE:
+            right = [i for i in ids if citable(name, by_id[i])]
+            if score > 1 and not right:
+                score, note = 1.0, f"no evidence: no {' or '.join(CITABLE[name])} claim cited (capped at 1). {note}"
+            ids = right
+        scores[name], notes[name], cited[name] = score, note, ids
     for name, (cap, why) in evidence_caps(claims).items():
-        if scores[name] > cap:
+        if name in scores and scores[name] > cap:
             scores[name] = cap
             notes[name] = f"{notes[name]} ({why})"
     # Competition 0 stops the idea ("a free tool already solves it"), so it must rest on a sourced
     # claim that a competitor is free. Paid competitors, or none found, are not a 0.
-    if scores["competition"] == 0 and not free_competitor_claims(claims):
+    if scores.get("competition") == 0 and not free_competitor_claims(claims):
         scores["competition"] = WEAK
         notes["competition"] = f"{notes['competition']} (raised to 1: a 0 needs a sourced claim that a free tool solves it)"
-    return scores, notes
+    if scores.get("competition") == 0:
+        cited["competition"] = [c["id"] for c in free_competitor_claims(claims) if c.get("id")]
+    rr, rr_note, rr_ids = rules_risk(state or {}, claims)
+    scores["rules_risk"], notes["rules_risk"], cited["rules_risk"] = rr, rr_note, rr_ids
+    return scores, notes, cited, incomplete
 
 
 def free_competitor_claims(claims: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -109,35 +163,50 @@ def free_competitor_claims(claims: Iterable[dict[str, Any]]) -> list[dict[str, A
     ]
 
 
+def grouped_claims(claims: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Claims for the model, grouped by evidence type, each with its id."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for c in claims:
+        groups.setdefault(claim_kind(c) or "other", []).append(
+            {"id": c.get("id"), "text": c["text"], "tier": c.get("tier"), "support": c.get("support")})
+    return groups
+
+
 def make_node(step: int, name: str):
     def node(state: dict[str, Any]) -> dict[str, Any]:
         claims = current_claims(state)
         payload = {
             "brief": brief_for_model(state["brief"]),
             "niche": state.get("subdomain") or None,
-            "claims": [
-                {"i": i, "text": c["text"], "support": c.get("support"), "tier": c.get("tier"), "criterion": c.get("area")}
-                for i, c in enumerate(claims)
-            ],
+            "claims_by_type": grouped_claims(claims),
             "skeptic_checks": state.get("claim_checks") or [],
         }
-        data, usage = ask_json("scorer", payload, role="smart", max_tokens=700, temperature=0)
-        scores, notes = clean_scores(data.get("scores"), data.get("reasons"), claims)
+        data, usage = ask_json("scorer", payload, role="smart", max_tokens=900, temperature=0)
+        scores, notes, cited, incomplete = clean_scores(data.get("criteria"), claims, state)
 
         log_action(
             agent="scorer", action=f"score_rubric_{name}", sources=sorted({c["url"] for c in claims if c.get("url")}),
             run_id=state.get("run_id"), round=state.get("round", 1), **model_fields(usage), scores=scores,
+            claim_ids=cited, scoring_incomplete=incomplete,
         )
         weights = {k: v["weight"] for k, v in load_rubric()["criteria"].items()}
-        rows = "\n".join(f"| {k} | {weights[k]:.0%} | {v:g} | {notes[k]} |" for k, v in scores.items())
+        rows = "\n".join(
+            f"| {k} | {weights[k]:.0%} | {scores[k]:g} | {', '.join(cited.get(k) or []) or '-'} | {notes[k]} |"
+            if k in scores else f"| {k} | {weights[k]:.0%} | **missing** | - | the model returned no valid score |"
+            for k in weights
+        )
+        missing = (f"\n\n**Scoring incomplete** ({', '.join(incomplete)}): the gate recommends repeat; "
+                   "no missing score is turned into a 0.") if incomplete else ""
         write_output(1, step, name, (
             f"# Phase 1, step {step}: rubric scores (round {state.get('round', 1)})\n\n"
-            "| Criterion | Weight | Score (0-4) | Reason |\n|---|---|---|---|\n" + rows + "\n\n"
-            "Weights and cut-offs are our design choices (rubric.yaml).\n\n"
-            "## Claims the scorer saw\n\nThe numbers in the reasons, like [2], refer to this list.\n\n"
-            + claims_markdown(claims) + "\n"
+            "| Criterion | Weight | Score (0-4) | Claims | Reasoning |\n|---|---|---|---|---|\n" + rows + missing + "\n\n"
+            "A score above 1 on problem evidence, competition, willingness to pay or market must cite a claim of the "
+            "matching evidence type. Rules and risk comes from the guardrails, not the model. Weights and cut-offs are "
+            "our design choices (rubric.yaml).\n\n"
+            "## Claims\n\n" + claims_markdown(claims) + "\n"
         ))
-        return {"scores": scores, "score_notes": notes, "tokens": usage["tokens"]}
+        return {"scores": scores, "score_notes": notes, "score_claims": cited, "scoring_incomplete": incomplete,
+                "tokens": usage["tokens"]}
 
     node.__name__ = f"scorer_{name}"
     return node

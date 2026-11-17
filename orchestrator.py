@@ -43,7 +43,7 @@ from typing import Any, Optional, Union
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, Send, interrupt
 
-from agents import coach, intake, researcher, scorer, skeptic, subdomain, weigher
+from agents import coach, discovery, intake, researcher, scorer, search_plan, skeptic, subdomain, weigher
 from agents._common import describe_violation, text_violations
 from agents.scorer import current_claims
 import gates as gates_mod
@@ -108,8 +108,8 @@ def category_check_node(state: Briefcase) -> dict[str, Any]:
     log_action(agent="guardrails", action="category_check", model=None, run_id=state.get("run_id"),
                allowed=allowed, category=category, stubbed=stubbed)
     status = "STUBBED" if stubbed else "Working"
-    write_output(1, 2, "category check", (
-        f"# Phase 1, step 2: category check\n\nAllowed: **{allowed}**\n\nCategory: {category}\n\nReason: {reason}\n"
+    write_output(1, 1, "category check", (
+        f"# Phase 1, step 1: category check\n\nAllowed: **{allowed}**\n\nCategory: {category}\n\nReason: {reason}\n"
     ), status=status)
     if allowed:
         return {}
@@ -122,6 +122,12 @@ def category_check_node(state: Briefcase) -> dict[str, Any]:
     return {"stopped": True, "stop_reason": reason, "gate_results": [result.model_dump()]}
 
 
+def after_category_check(state: Briefcase) -> str:
+    if state.get("stopped"):
+        return "finish"
+    return "discovery_skip" if discovery.has_confirmed_understanding(state["brief"]) else "discovery_prepare"
+
+
 def fan_out(state: Briefcase) -> list[Send]:
     """One researcher per area, in parallel."""
     return [
@@ -131,13 +137,25 @@ def fan_out(state: Briefcase) -> list[Send]:
     ]
 
 
-def _gate_markdown(result: GateResult, decision: Optional[FounderDecision]) -> str:
+def _memo_markdown(memo: Optional[dict[str, Any]]) -> str:
+    if not memo:
+        return ""
+    why = "\n".join(f"- {w['text']}" + (f" ({', '.join(w['claim_ids'])})" if w.get("claim_ids") else "")
+                    for w in memo.get("why") or [])
+    unknowns = "\n".join(f"- {u}" for u in memo.get("unknowns") or []) or "- _none listed_"
+    steps = "\n".join(f"- {n}" for n in memo.get("next_steps") or []) or "- _none listed_"
+    return (f"## Evaluation memo\n\n**{memo.get('headline', '')}**\n\n{why}\n\n"
+            f"Still unknown:\n{unknowns}\n\nNext steps:\n{steps}\n\n")
+
+
+def _gate_markdown(result: GateResult, decision: Optional[FounderDecision], memo: Optional[dict[str, Any]] = None) -> str:
     reasons = "\n".join(f"- {r}" for r in result.reasons)
     score = f"{result.score:.2f} of 4" if result.score is not None else "not scored"
     body = (
         f"# Phase {result.phase} gate: {result.gate}\n\n"
         f"Recommendation: **{result.recommendation.upper()}**\n\nWeighted score: {score}\n\n"
         f"Target set before the phase: {result.target}\n\nEvidence: {result.evidence_summary}\n\n## Reasons\n\n{reasons}\n\n"
+        + _memo_markdown(memo) +
         "The recommendation comes from fixed rules in gates.py"
         + (" and rubric.yaml; the weights and cut-offs are our design choices" if result.phase == 1 else "")
         + ".\n\n"
@@ -193,16 +211,21 @@ def make_gate_eval(gate: str):
         draft_hits = text_violations(current_drafts(state), True, round_no)
         founder_hits = [v for v in state.get("text_violations") or [] if not v.get("rewritable")]
         gaps = [f"\"{g['area']}\" ({g['focus']})" for g in state.get("search_gaps") or [] if g.get("round") == round_no]
-        result = evaluate_gate_1(
-            state["scores"], current_claims(state),
-            violations=[describe_violation(v) for v in founder_hits],
-            rewritable_violations=[describe_violation(v) for v in draft_hits],
-            evidence_gaps=gaps,
-        ).model_copy(update={"gate": gate})
-        write_gate(1, _gate_file(gate), _gate_markdown(result, None))
+        if state.get("scoring_incomplete"):
+            result = gates_mod.evaluate_scoring_incomplete(state["scoring_incomplete"], gate)
+        else:
+            result = evaluate_gate_1(
+                state["scores"], current_claims(state),
+                violations=[describe_violation(v) for v in founder_hits],
+                rewritable_violations=[describe_violation(v) for v in draft_hits],
+                evidence_gaps=gaps,
+            ).model_copy(update={"gate": gate})
+        memo = build_memo(state, result)
+        write_gate(1, _gate_file(gate), _gate_markdown(result, None, memo))
         log_action(agent="gate", action=gate, model=None, run_id=state.get("run_id"), outcome=result.recommendation,
-                   score=result.score, round=round_no, guardrail_violations=[v["rule"] for v in founder_hits + draft_hits])
-        return {"gate_results": [result.model_dump()], "text_violations": draft_hits}
+                   score=result.score, round=round_no, guardrail_violations=[v["rule"] for v in founder_hits + draft_hits],
+                   memo_source=memo.get("source"))
+        return {"gate_results": [{**result.model_dump(), "memo": memo}], "text_violations": draft_hits}
 
     node.__name__ = f"{gate}_eval"
     return node
@@ -210,15 +233,16 @@ def make_gate_eval(gate: str):
 
 def make_gate_wait(gate: str):
     def node(state: Briefcase) -> dict[str, Any]:
-        result = GateResult(**state["gate_results"][-1])
+        last = state["gate_results"][-1]
+        result = GateResult(**last)
         # Pauses until the founder answers. resume_run only accepts a FounderDecision here.
-        reply = interrupt({"kind": "gate", **result.model_dump()})
+        reply = interrupt({"kind": "gate", **result.model_dump(), "memo": last.get("memo") or {}})
         decision = FounderDecision(**reply)
         if decision.gate != gate or decision.phase != result.phase:
             raise ValueError(f"decision is for {decision.gate!r}, but the run is waiting at {gate!r}")
         check_approval(decision, result.recommendation)
         decision = decision.model_copy(update={"overrides_recommendation": decision.outcome != result.recommendation})
-        write_gate(result.phase, _gate_file(gate), _gate_markdown(result, decision))
+        write_gate(result.phase, _gate_file(gate), _gate_markdown(result, decision, last.get("memo")))
         log_action(agent="gate", action=f"{gate}_founder_decision", model=None, approved_by="founder",
                    run_id=state.get("run_id"), round=state.get("round", 1),
                    outcome=decision.outcome, recommendation=result.recommendation,
@@ -232,6 +256,12 @@ def make_gate_wait(gate: str):
             repeats = dict(state.get("phase_repeats") or {})
             repeats[gate] = repeats.get(gate, 0) + 1
             update["phase_repeats"] = repeats
+            # "Request changes" = repeat with a note: the phase reruns once with the note in the brief,
+            # which every phase agent sends to the model.
+            brief = {k: v for k, v in state["brief"].items() if k != "change_request"}
+            if decision.note.strip():
+                brief["change_request"] = decision.note.strip()
+            update["brief"] = brief
         return update
 
     node.__name__ = f"{gate}_wait"
@@ -308,10 +338,15 @@ def finish_node(state: Briefcase) -> dict[str, Any]:
 
 def build_graph(checkpointer=None):
     g = StateGraph(Briefcase)
-    g.add_node("intake", intake.node)
     g.add_node("category_check", category_check_node)
-    g.add_node("weigher", weigher.node)
-    g.add_node("researcher", researcher.node)
+    g.add_node("discovery_prepare", discovery.prepare_node)
+    g.add_node("discovery_ask", discovery.ask_node)
+    g.add_node("discovery_confirm", discovery.confirm_node)
+    g.add_node("discovery_skip", discovery.skip_node)
+    g.add_node("category_recheck", category_check_node)
+    g.add_node("search_plan", search_plan.node)
+    g.add_node("researcher", researcher.evidence_node)
+    g.add_node("research_summary", researcher.summary_node)
     g.add_node("skeptic", skeptic.node)
     g.add_node("scorer", scorer.node)
     g.add_node("gate_1", make_gate_eval(GATE_1))
@@ -325,17 +360,23 @@ def build_graph(checkpointer=None):
     g.add_node("round_limit", round_limit_node)
     g.add_node("finish", finish_node)
 
-    g.add_edge(START, "intake")
-    g.add_edge("intake", "category_check")
-    g.add_conditional_edges("category_check", lambda s: "finish" if s.get("stopped") else "weigher", ["weigher", "finish"])
-    g.add_conditional_edges("weigher", fan_out, ["researcher"])
-    g.add_edge("researcher", "skeptic")
+    g.add_edge(START, "category_check")
+    g.add_conditional_edges("category_check", after_category_check, ["finish", "discovery_prepare", "discovery_skip"])
+    g.add_conditional_edges("discovery_prepare", discovery.after_prepare, ["discovery_ask", "discovery_confirm"])
+    g.add_edge("discovery_ask", "discovery_prepare")
+    g.add_conditional_edges("discovery_confirm", discovery.after_confirm, ["category_recheck", "discovery_prepare"])
+    g.add_conditional_edges("category_recheck", lambda s: "finish" if s.get("stopped") else "search_plan",
+                            ["finish", "search_plan"])
+    g.add_edge("discovery_skip", "search_plan")
+    g.add_conditional_edges("search_plan", researcher.fan_out_plan, ["researcher"])
+    g.add_edge("researcher", "research_summary")
+    g.add_edge("research_summary", "skeptic")
     g.add_edge("skeptic", "scorer")
     g.add_edge("scorer", "gate_1")
     g.add_edge("gate_1", "gate_1_wait")
     g.add_conditional_edges("gate_1_wait", after_gate(GATE_1), ["finish", "coach", "round_limit", "subdomain"])
     g.add_edge("coach", "coach_answers")
-    g.add_edge("coach_answers", "weigher")
+    g.add_edge("coach_answers", "search_plan")
     g.add_edge("subdomain", "rescore")
     g.add_edge("rescore", "gate_1_niche")
     g.add_edge("gate_1_niche", "gate_1_niche_wait")
@@ -426,10 +467,11 @@ def make_phase_gate_eval(gate: str):
             result = gates_mod.evaluate_gate_5(drafts.get("phase5_launch") or {}, passed, note)
         else:
             result = gates_mod.evaluate_gate_6(drafts.get("phase6_memo") or {})
-        write_gate(result.phase, _gate_file(gate), _gate_markdown(result, None))
+        memo = build_memo(state, result)
+        write_gate(result.phase, _gate_file(gate), _gate_markdown(result, None, memo))
         log_action(agent="gate", action=gate, model=None, run_id=state.get("run_id"), phase=result.phase,
-                   outcome=result.recommendation, **extra)
-        return {"gate_results": [result.model_dump()]}
+                   outcome=result.recommendation, memo_source=memo.get("source"), **extra)
+        return {"gate_results": [{**result.model_dump(), "memo": memo}]}
 
     node.__name__ = f"{gate}_eval"
     return node
@@ -446,11 +488,65 @@ def after_phase_gate(gate: str, next_node: str, phase_node: str):
             if (state.get("phase_repeats") or {}).get(gate, 0) > MAX_PHASE_REPEATS:
                 return "repeat_limit"
             draft = (state.get("drafts") or {}).get("phase2_lean_canvas") or {}
-            # Gate 2 usually repeats for a missing real count: ask again rather than redraft the canvas.
-            return "gate_2_targets" if gate == "gate_2" and not draft.get("violations") else phase_node
+            changes = (state.get("brief") or {}).get("change_request")
+            # Gate 2 usually repeats for a missing real count: ask again rather than redraft the canvas,
+            # unless the founder asked for changes or the draft broke a guardrail.
+            return "gate_2_targets" if gate == "gate_2" and not draft.get("violations") and not changes else phase_node
         return next_node
 
     return route
+
+
+BUILD_FORMATS = ["A guide or checklist (Markdown files)", "A small single-page tool (HTML)", "Let the build agent choose"]
+
+
+def build_options_node(state: Briefcase) -> dict[str, Any]:
+    """Before the build: the founder picks the product format and says what the first version must include."""
+    questions = [
+        {"id": "product_format", "text": "What should the first version be?",
+         "why": "The build makes the simplest honest product in this format.", "suggestions": [], "choices": BUILD_FORMATS},
+        {"id": "must_include", "text": "Anything the first version must include?",
+         "why": "The build agent gets this with the plan.", "suggestions": [], "choices": None},
+    ]
+    reply = interrupt({"kind": "questions", "stage": "build_options", "questions": questions}) or {}
+    answers = {k: str(v).strip() for k, v in (reply.get("answers") or {}).items() if str(v).strip()}
+    chosen = answers.get("product_format") if answers.get("product_format") in BUILD_FORMATS else BUILD_FORMATS[2]
+    prefs = {"product_format": chosen, "must_include": answers.get("must_include", "")}
+    log_action(agent="gate", action="build_options", model=None, approved_by="founder", run_id=state.get("run_id"),
+               **prefs)
+    return {"brief": {**state["brief"], "build_preferences": prefs}}
+
+
+def build_memo(state: Briefcase, result: GateResult) -> dict[str, Any]:
+    """The evaluation memo for a gate: Hashish's agents/evaluation_memo.write_memo when it is on main,
+    otherwise a plain Python memo built from the gate's reasons and the scores' claim ids."""
+    try:
+        from agents.evaluation_memo import write_memo
+
+        memo = dict(write_memo(state, result.model_dump()) or {})
+        return {**memo, "source": "agents.evaluation_memo"}
+    except ImportError:
+        pass
+    scores, notes, cited = state.get("scores") or {}, state.get("score_notes") or {}, state.get("score_claims") or {}
+    per_criterion = [{"criterion": c, "score": scores[c], "claim_ids": cited.get(c, []), "reasoning": notes.get(c, "")}
+                     for c in scores] if result.phase == 1 else []
+    ids = sorted({i for v in cited.values() for i in v}, key=lambda x: int(x[1:]) if x[1:].isdigit() else 0)
+    unknowns = [f"{p['criterion']}: no claim cited" for p in per_criterion if not p["claim_ids"]
+                and p["criterion"] not in ("founder_fit", "feasibility")]
+    headline = {"go": "Go: the evidence meets the target set before the phase.",
+                "repeat": "Repeat: more evidence or another pass is needed first.",
+                "pivot": "Pivot: the pain looks real, the idea as framed does not.",
+                "stop": "Stop: the evidence says not to continue."}[result.recommendation]
+    next_steps = {"go": ["Approve to continue to the next phase."],
+                  "repeat": ["Answer the coach's questions, or request changes with a note."],
+                  "pivot": ["Review the coach's revised idea."],
+                  "stop": ["Approve the stop, or override it with a note (logged as an override)."]}[result.recommendation]
+    return {"verdict": result.recommendation, "headline": headline,
+            "why": [{"text": r, "claim_ids": []} for r in result.reasons]
+            + [{"text": f"{p['criterion']} {p['score']:g}/4: {p['reasoning']}", "claim_ids": p["claim_ids"]}
+               for p in per_criterion if p["claim_ids"]],
+            "per_criterion": per_criterion, "unknowns": unknowns, "next_steps": next_steps,
+            "claim_ids": ids, "source": "fallback"}
 
 
 def repeat_limit_node(state: Briefcase) -> dict[str, Any]:
@@ -464,8 +560,12 @@ def add_later_phases(g) -> None:
     g.add_node("gate_2_targets", gate_2_targets_node)
     g.add_node("repeat_limit", repeat_limit_node)
     g.add_edge("repeat_limit", "finish")
+    g.add_node("build_options", build_options_node)
+    g.add_edge("build_options", "phase_3_build")
     for i, (node, phase, module, gate) in enumerate(LATER_PHASES):
         next_node = LATER_PHASES[i + 1][0] if i + 1 < len(LATER_PHASES) else "finish"
+        if gate == "gate_3_plan":
+            next_node = "build_options"  # the founder picks the product format before anything is built
         g.add_node(node, make_phase_node(phase, module))
         g.add_node(gate, make_phase_gate_eval(gate))
         g.add_node(f"{gate}_wait", make_gate_wait(gate))
