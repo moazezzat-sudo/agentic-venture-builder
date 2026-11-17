@@ -24,7 +24,15 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
     query = cut(data.get("competitor_query") or f"{niche} tools", 120)
     kit = write_interview_kit(data.get("interview_questions"), niche, "go")
 
-    claims, r_usage, sources = researcher.research({"name": "competitors in niche", "query": query}, brief, round_no)
+    claims, r_usage, sources = researcher.research({"name": "competitors in niche", "query": query, "focus": "competitors"},
+                                                   brief, round_no)
+    if not sources:
+        # A niche query can be too narrow for the search engine; fall back to the round's competitor query.
+        fallback = next((a["query"] for a in state.get("areas", []) if a.get("focus") == "competitors"), None)
+        if fallback and fallback != query:
+            query = fallback
+            claims, r_usage, sources = researcher.research(
+                {"name": "competitors in niche", "query": query, "focus": "competitors"}, brief, round_no)
     tokens = usage["tokens"] + r_usage["tokens"]
     stubbed = researcher._stubbed_tools()
 

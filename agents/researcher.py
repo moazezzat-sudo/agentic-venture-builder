@@ -43,13 +43,19 @@ AD_URL = re.compile(
 )
 
 
+def plain_query(query: str) -> str:
+    """Models write non-breaking hyphens and spaces ("time‑tracking"); search engines may not match them."""
+    query = re.sub(r"[‐-―−]", "-", query)
+    return " ".join(re.sub(r"[  -​ ]", " ", query).split())
+
+
 def find_sources(query: str) -> list[dict[str, Any]]:
     """Search and rate. Returns [{i, title, url, snippet, tier}]. Skips ads, redirects and non-http(s) URLs."""
     from tools.credibility import rate
     from tools.search import search
 
     sources = []
-    for r in search(query, max_results=MAX_RESULTS)[:MAX_RESULTS]:
+    for r in search(plain_query(query), max_results=MAX_RESULTS)[:MAX_RESULTS]:
         url = str(r.get("url", ""))
         if AD_URL.match(url):
             continue
