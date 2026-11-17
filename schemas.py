@@ -121,3 +121,13 @@ class Briefcase(TypedDict, total=False):
     founder_decisions: Annotated[list[dict[str, Any]], operator.add]
     current_phase: int
     stopped: bool
+    # Phase 1 graph bookkeeping (orchestrator.py)
+    round: int  # 1 on the first pass; +1 each coach loop. Claims carry the round they came from.
+    evidence_from_round: int  # claims from this round on count; moves forward on an accepted pivot
+    areas: list[dict[str, Any]]  # weigher output: [{name, weight, query}]
+    research_area: dict[str, Any]  # the one area a parallel researcher works on (Send payload)
+    score_notes: dict[str, str]  # one-line reason per rubric criterion, from the scorer
+    stop_reason: str
+    coach_notes: dict[str, Any]
+    interview_kit: list[str]
+    tokens: Annotated[int, operator.add]  # model tokens used in this run
