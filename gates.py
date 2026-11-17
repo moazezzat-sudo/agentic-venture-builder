@@ -120,7 +120,28 @@ def _as_claim(claim: ClaimLike) -> Claim:
 
 def _domain(url: str) -> str:
     host = urlparse(url).netloc.lower()
-    return host[4:] if host.startswith("www.") else host
+    host = host[4:] if host.startswith("www.") else host
+    return host[4:] if host.startswith(("old.", "new.")) and host.endswith("reddit.com") else host
+
+
+# On these sites each thread is written by different people, so each thread is an independent source
+# (PLAN.md section 4: "at least 3 independent source URLs"). Everywhere else one site counts once,
+# so a single vendor blog can't count several times.
+FORUM_DOMAINS = ("reddit.com", "news.ycombinator.com", "stackexchange.com", "stackoverflow.com", "quora.com")
+
+
+def source_key(url: str) -> str:
+    """What makes a pain source independent: the site, or the thread on a forum."""
+    domain = _domain(url)
+    if not any(domain == f or domain.endswith("." + f) for f in FORUM_DOMAINS):
+        return domain
+    parts = urlparse(url)
+    path = "/".join(p for p in parts.path.lower().split("/") if p)
+    if domain.endswith("reddit.com"):
+        segs = path.split("/")  # r/<sub>/comments/<id>/<slug>: the id names the thread
+        path = "/".join(segs[:4]) if len(segs) >= 4 and segs[2] == "comments" else path
+    query = f"?{parts.query}" if domain == "news.ycombinator.com" and parts.query else ""
+    return f"{domain}/{path}{query}"
 
 
 def claim_stats(claims: Iterable[ClaimLike]) -> dict[str, Any]:
@@ -131,8 +152,9 @@ def claim_stats(claims: Iterable[ClaimLike]) -> dict[str, Any]:
     parsed = [_as_claim(c) for c in claims]
     total = len(parsed)
     sourced = sum(1 for c in parsed if c.support in ("url", "evidence"))
+    # Name kept for the app and tests: the independent pain sources (a site, or a forum thread).
     pain_domains = sorted({
-        _domain(c.url) for c in parsed
+        source_key(c.url) for c in parsed
         if c.support == "url" and c.url and c.area == "problem_evidence"
     })
     return {
@@ -153,12 +175,31 @@ def evaluate_gate_1(
     violations: Optional[Iterable[str]] = None,
     rubric: Optional[Mapping[str, Any]] = None,
     rewritable_violations: Optional[Iterable[str]] = None,
+    evidence_gaps: Optional[Iterable[str]] = None,
 ) -> GateResult:
     """Recommend go / repeat / pivot / stop for Gate 1 (Discover), with reasons the founder can read.
 
     violations: guardrail hits that stop the idea (banned category, the founder's own text).
     rewritable_violations: hits in drafts our agents wrote; they can be rewritten, so -> repeat.
+    evidence_gaps: areas where web search could not be reached (no web engine answered). A stop that
+        rests only on missing evidence then becomes repeat: no data is not evidence against the idea.
+        Stops from guardrails, a free competitor or rules and risk stay stop.
     """
+    gaps = [g for g in (evidence_gaps or []) if g]
+    if gaps:
+        result = evaluate_gate_1(scores, claims, violations, rubric, rewritable_violations)
+        evidence_stop = (
+            result.recommendation == "stop" and not [v for v in (violations or []) if v]
+            and check_scores(scores, rubric or load_rubric())["competition"] != 0
+            and check_scores(scores, rubric or load_rubric())["rules_risk"] != 0
+        )
+        if evidence_stop:
+            reasons = [*result.reasons,
+                       "Held at repeat instead of stop: web search returned nothing usable for "
+                       + ", ".join(gaps) + ", so the evidence could not be gathered. Run again when search works."]
+            return result.model_copy(update={"recommendation": "repeat", "reasons": reasons})
+        return result.model_copy(update={"reasons": [*result.reasons, "Web search returned nothing usable for "
+                                                     + ", ".join(gaps) + "."]})
     rubric = rubric or load_rubric()
     d, g1 = rubric["decision"], rubric["gate_1"]
     clean = check_scores(scores, rubric)

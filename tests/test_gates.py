@@ -79,8 +79,23 @@ def test_outcome_from_total_boundaries():
 
 def test_claim_stats_counts_independent_domains():
     stats = gates.claim_stats([pain("www.reddit.com"), pain("reddit.com"), pain("x.com"), assumption()])
-    assert stats["pain_domains"] == ["reddit.com", "x.com"]
+    assert stats["pain_domains"] == ["reddit.com/thread", "x.com"]  # www and non-www are the same thread
     assert stats["sourced"] == 3 and stats["unsourced"] == 1
+
+
+def test_forum_threads_are_independent_but_one_site_counts_once():
+    def url_claim(url):
+        return Claim(text="pain", support="url", url=url, tier="D", area="problem_evidence")
+
+    claims = [url_claim(u) for u in [
+        "https://www.reddit.com/r/freelance/comments/abc123/late_invoices/",
+        "https://old.reddit.com/r/freelance/comments/abc123/late_invoices/?sort=new",  # same thread
+        "https://www.reddit.com/r/smallbusiness/comments/xyz789/clients_dont_pay/",
+        "https://news.ycombinator.com/item?id=1",
+        "https://news.ycombinator.com/item?id=2",
+        "https://vendor.example.com/blog/a", "https://vendor.example.com/blog/b",  # one vendor, two posts
+    ]]
+    assert len(gates.claim_stats(claims)["pain_domains"]) == 5
 
 
 def test_claim_stats_accepts_dicts_and_no_claims():
@@ -123,6 +138,20 @@ def test_draft_violation_holds_at_repeat_but_never_upgrades_stop():
     r = gates.evaluate_gate_1(scores(4), GOOD_CLAIMS, rewritable_violations=[hit])
     assert r.recommendation == "repeat" and any(hit in reason for reason in r.reasons)
     assert gates.evaluate_gate_1(scores(1), GOOD_CLAIMS, rewritable_violations=[hit]).recommendation == "stop"
+
+
+def test_search_outage_turns_an_evidence_stop_into_repeat():
+    gaps = ["problem (search unreachable)"]
+    # No pain evidence because search was down: repeat, with the reason said.
+    r = gates.evaluate_gate_1(scores(3, problem_evidence=0), GOOD_CLAIMS, evidence_gaps=gaps)
+    assert r.recommendation == "repeat" and any("could not be gathered" in x for x in r.reasons)
+    assert gates.evaluate_gate_1(scores(1), [], evidence_gaps=gaps).recommendation == "repeat"
+    # Stops that rest on evidence or rules stay stop.
+    assert gates.evaluate_gate_1(scores(3, competition=0), GOOD_CLAIMS, evidence_gaps=gaps).recommendation == "stop"
+    assert gates.evaluate_gate_1(scores(3, rules_risk=0), GOOD_CLAIMS, evidence_gaps=gaps).recommendation == "stop"
+    assert gates.evaluate_gate_1(scores(4), GOOD_CLAIMS, violations=["banned"], evidence_gaps=gaps).recommendation == "stop"
+    # Without gaps nothing changes.
+    assert gates.evaluate_gate_1(scores(3, problem_evidence=0), GOOD_CLAIMS).recommendation == "stop"
 
 
 def test_mostly_assumptions_stops():
