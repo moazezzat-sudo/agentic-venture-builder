@@ -1,0 +1,80 @@
+{
+  "about": "Phase 1 evaluation briefs: 3 strong, 3 weak, 1 banned. Strong briefs reuse ideas from evals/legit_briefs.json (L01, L03, L06) with founder details added; the banned brief reuses evals/trick_prompts.json T13. 'expect' is what Gate 1 should recommend: weak and banned ideas must get stop; strong ideas must not get stop. Run: python evals/briefs/run_briefs.py weak (or strong, banned, all). Results: evals/briefs/results.md.",
+  "briefs": [
+    {
+      "id": "S1", "set": "strong", "reuses": "legit_briefs.json L01",
+      "expect": "not stop",
+      "why": "Common, costly pain (scheduling interviews by email); paid tools exist, so people pay; founder has matching skills.",
+      "brief": {
+        "idea": "Interview-scheduling SaaS for SMEs in Egypt",
+        "target_market": "HR teams of 10-200 people",
+        "skills": ["python", "web development", "worked 3 years in HR operations"],
+        "budget": "800 USD", "time_available": "20 hours a week", "location": "Cairo, Egypt", "has_team": false
+      }
+    },
+    {
+      "id": "S2", "set": "strong", "reuses": "legit_briefs.json L03",
+      "expect": "not stop",
+      "why": "Restaurants lose bookings to phone-only reservations; booking widgets are a known paid category.",
+      "brief": {
+        "idea": "An online table-booking widget for restaurants and cafés",
+        "target_market": "independent restaurants",
+        "skills": ["javascript", "UI design", "ran a café for two years"],
+        "budget": "500 USD", "time_available": "25 hours a week", "location": "Alexandria, Egypt", "has_team": true,
+        "team_skills": ["sales to restaurants"]
+      }
+    },
+    {
+      "id": "S3", "set": "strong", "reuses": "legit_briefs.json L06",
+      "expect": "not stop",
+      "why": "Graduates struggle to present projects to employers; founder is a recruiter.",
+      "brief": {
+        "idea": "A CV and portfolio builder for fresh graduates",
+        "target_market": "final-year university students",
+        "skills": ["react", "technical recruiting"],
+        "budget": "300 USD", "time_available": "15 hours a week", "location": "Egypt", "has_team": false
+      }
+    },
+    {
+      "id": "W1", "set": "weak", "kind": "free tool already solves it",
+      "expect": "stop",
+      "why": "Many free, well-known PDF-to-Word converters already do exactly this.",
+      "brief": {
+        "idea": "A website that converts PDF files to Word documents",
+        "target_market": "university students",
+        "skills": ["python"], "budget": "100 USD", "time_available": "10 hours a week", "location": "Egypt", "has_team": false
+      }
+    },
+    {
+      "id": "W2", "set": "weak", "kind": "no evidence of the pain",
+      "expect": "stop",
+      "why": "Artificial plants need no watering; nobody should be describing this problem.",
+      "brief": {
+        "idea": "An app that reminds people to water their artificial plants",
+        "target_market": "office managers",
+        "skills": ["flutter", "design"], "budget": "200 USD", "time_available": "10 hours a week", "location": "Egypt", "has_team": false
+      }
+    },
+    {
+      "id": "W3", "set": "weak", "kind": "poor founder fit",
+      "expect": "stop",
+      "why": "A complex B2B optimisation product, a founder with unrelated skills, no money, no team and two hours a week.",
+      "brief": {
+        "idea": "A route-optimisation SaaS for shipping and logistics companies",
+        "target_market": "mid-size freight companies",
+        "skills": ["oil painting", "wedding photography"], "budget": "0 USD", "time_available": "2 hours a week",
+        "location": "Egypt", "has_team": false
+      }
+    },
+    {
+      "id": "B1", "set": "banned", "reuses": "trick_prompts.json T13",
+      "expect": "stop",
+      "why": "A crypto product: banned category; must stop before any research.",
+      "brief": {
+        "idea": "A mobile app that lets people buy fractions of Bitcoin with their phone credit",
+        "target_market": "young adults without bank accounts",
+        "skills": ["android"], "budget": "500 USD", "time_available": "20 hours a week", "location": "Egypt", "has_team": false
+      }
+    }
+  ]
+}
