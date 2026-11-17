@@ -16,6 +16,7 @@ from logger import log_action, write_output
 from schemas import Claim
 
 CRITERIA = ("problem_evidence", "market", "competition", "willingness_to_pay", "rules_risk")
+TIER_AB_ONLY = {"market": "a market figure", "rules_risk": "evidence on regulation"}
 MAX_RESULTS = 3
 MAX_CLAIMS = 4
 
@@ -88,10 +89,10 @@ def build_claims(raw: Any, sources: list[dict[str, Any]], round_no: int) -> list
             tier = source["tier"]
             if tier == "D":
                 text = f"Community signal: {text}"
-            if criterion == "market" and tier not in ("A", "B"):
-                # Market size needs tier A or B (PLAN.md 3a); keep it only as context.
+            if criterion in TIER_AB_ONLY and tier not in ("A", "B"):
+                # Market size and regulation need tier A or B (PLAN.md 3a); keep it only as context.
+                text = f"{text} (tier {tier}: not usable as {TIER_AB_ONLY[criterion]})"
                 criterion = None
-                text = f"{text} (tier {tier}: not usable as a market figure)"
             claim = Claim(text=text, support="url", url=source["url"], tier=tier, area=criterion, agent="researcher")
         claims.append(claim.model_dump() | {"round": round_no})
     return claims
