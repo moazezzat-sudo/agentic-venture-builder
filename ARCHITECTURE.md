@@ -12,7 +12,7 @@ flowchart TD
   G1 -- "repeat / pivot (max 3 rounds)" --> CO["coach: improvements + questions"] --> P1
   G1 -- "go" --> P2["Phase 2: Validate<br/>Lean Canvas, landing copy, waitlist test"]
   P2 --> G2{"Gate 2 (STUBBED)"}
-  G2 -- "go" --> P3["Phase 3: Build<br/>architect, UI/UX, MVP plan"]
+  G2 -- "go" --> P3["Phase 3: Build<br/>plan, then landing page, product, user docs"]
   P3 --> G3{"Gate 3 (STUBBED)"}
   G3 -- "go" --> P4["Phase 4: Commercial setup<br/>pricing, policy drafts, marketing plan"]
   P4 --> G4{"Gate 4 (STUBBED)"}
@@ -81,7 +81,28 @@ flowchart TD
 - **UI/UX:** the main user flows and the screens they need.
 - **MVP plan:** the smallest feature set that tests the riskiest assumption. The weakest Phase 1 rubric criteria are passed in, so the MVP targets what the evidence left most uncertain. Feasibility against the founder's hours, budget and skills is labelled `ASSUMPTION`.
 
-Output: `phase3_step1_build_plan.md`. Status: runs standalone with tests, not yet wired into the graph (STUBBED). The coder and tester agents (generate the MVP and run its tests), the docs writer, and the team builder (role description, application form, blind scoring, structured interview guide) are STUBBED.
+Output: `phase3_step1_build_plan.md`.
+
+**After the founder approves the build plan, a real build follows.** [`agents/phase3_build.py`](agents/phase3_build.py):
+
+1. **Product format.** One small model call picks the simplest honest digital format the idea allows:
+   - a Markdown template pack, guide or checklist; or
+   - a small single-file HTML tool (a calculator, converter or interactive checklist) that runs in the browser, uses no libraries or services, and sends no data.
+
+   If the idea needs a full app, only the smallest working piece is built, and the user docs say so.
+2. **Files.**
+   - `phase3_step2_landing.html`: a single-file landing page built in Python from the Phase 2 copy, with no model call and every value HTML-escaped. It has no external scripts. Its waitlist form posts nowhere and shows "Demo form: nothing is sent (STUBBED)". It has no reviews, testimonials, counters or countdowns.
+   - `phase3_step3_product_<name>.md` or `.html`: the product, from one model call. If the HTML tool can't be generated, the agent falls back to a Markdown guide and the docs say so.
+   - `phase3_step4_user_docs.md`: what it is, how to use it, and its limits. It is written from the product actually built, not from the plan.
+3. **Checks before Gate 3, in plain Python** (`check_build`). Any failure means **repeat**, with the reasons; this is Gate 3's "tests pass, docs exist". The checks:
+   - every file exists and isn't empty;
+   - every HTML file parses with `html.parser`, has balanced tags, and has no external script, no external resource, no form action, and no script that sends or loads data;
+   - `guardrails.check_text` passes on all visible text;
+   - the landing page shows the demo-form notice.
+
+Each model call is small: temperature 0 and capped length. Every file is labelled STUBBED (a header in Markdown, a visible banner in HTML). Tests: [`tests/test_phase_agents.py`](tests/test_phase_agents.py). Status: both Phase 3 agents run standalone with tests and are not yet wired into the graph (STUBBED).
+
+Not built: a full generated app (the coder and tester agents that generate a complete MVP in a separate project and run its tests) is on the roadmap and STUBBED. So are the team builder (role description, application form, blind scoring, structured interview guide) and a separate docs writer for a full app.
 
 ### Phase 4: Commercial setup
 
@@ -275,7 +296,7 @@ From the plan, after the hackathon:
 
 - **Wire Phases 2–6 into the graph,** each with its own founder gate and the targets in [Gates](#gates). Then the draft agents can move from STUBBED to Working once they run end to end with tests.
 - **Gate 2 waitlist test:** the founder enters the real sign-up count, and the gate compares it with the target set in advance.
-- **Build agents:** coder and tester agents that generate the MVP in a separate project folder and run its tests; a docs writer; and the team builder (role description, application form, blind scoring of exported responses, structured interview guide, suggested slots). People stay in charge of hiring.
+- **Build agents:** coder and tester agents that generate a full MVP app in a separate project folder and run its tests (today's build produces the landing page, a Markdown or single-file HTML product, and its docs); a docs writer; and the team builder (role description, application form, blind scoring of exported responses, structured interview guide, suggested slots). People stay in charge of hiring.
 - **Commercial setup:** rules research from official (tier A) sites only, and email drafts to agencies with their official contact details, for the founder to send.
 - **More data sources:** IMF, OECD, UN, Eurostat and national statistics offices such as CAPMAS; the Wikipedia pageviews API for interest over time; a RAG store of past runs' post-mortems.
 - **Operate and learn on real data:** sales and usage data from the founder's own store, in place of the MOCKED dataset.
