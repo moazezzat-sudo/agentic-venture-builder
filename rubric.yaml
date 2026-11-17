@@ -45,12 +45,14 @@ decision:
   stop_below: 2.0         # weighted total < 2.0 -> stop; between -> repeat or pivot
   stop_if_zero:           # any 0 here -> stop, whatever the total
     - problem_evidence
+    - competition         # 0 = a free tool already solves it (team decision, 15:20)
     - rules_risk
   cap_unsourced_share: 0.5    # more than half the claims unsourced -> no better than repeat
-  # Our choice for "mostly ASSUMPTIONs" (section 4, Gate 1 stop condition).
+  # "Mostly ASSUMPTIONs" (section 4, Gate 1 stop condition). Team decision, 15:20.
   stop_unsourced_share: 0.75
   # In the repeat/pivot band: the pain is real (problem_evidence at or above this)
   # but the idea as framed scores low -> pivot. Otherwise more evidence is needed -> repeat.
+  # Team decision, 15:20.
   pivot_problem_min: 3
 
 gate_1:
@@ -59,4 +61,4 @@ gate_1:
     sourced; founder fit acceptable
   min_pain_sources: 3     # distinct domains among problem_evidence claims with a URL
   min_sourced_share: 0.5
-  min_founder_fit: 2      # founder_fit score at or above this counts as acceptable
+  min_founder_fit: 2      # founder_fit score at or above this counts as acceptable (team decision, 15:20)

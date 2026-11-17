@@ -64,6 +64,11 @@ def clean_scores(raw_scores: Any, raw_reasons: Any, claims: list[dict[str, Any]]
         if scores[name] > cap:
             scores[name] = cap
             notes[name] = f"{notes[name]} ({why})"
+    # Competition 0 stops the idea ("a free tool already solves it"), so it must rest on a sourced
+    # competitor claim. With none, the model is reporting missing evidence, which is a 1.
+    if scores["competition"] == 0 and "competition" in evidence_caps(claims):
+        scores["competition"] = WEAK
+        notes["competition"] = f"{notes['competition']} (raised to 1: a 0 needs a sourced competitor claim)"
     return scores, notes
 
 
