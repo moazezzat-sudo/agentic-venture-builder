@@ -12,7 +12,7 @@ from typing import Any
 
 from langgraph.types import interrupt
 
-from agents._common import ask_json, brief_for_model, cut
+from agents._common import ask_json, brief_for_model, cut, text_violations, write_interview_kit
 from logger import log_action, write_output
 
 
@@ -32,9 +32,11 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         "score_reasons": state.get("score_notes", {}),
         "founder_note": decision.get("note", ""),
     }
-    data, usage = ask_json("coach", payload, role="smart", max_tokens=500)
+    data, usage = ask_json("coach", payload, role="smart", max_tokens=700)
     idea = state["brief"].get("idea", "")
     revised = cut(data.get("revised_idea") or idea, 400) if outcome == "pivot" else idea
+    audience = state["brief"].get("target_market") or revised
+    kit = write_interview_kit(data.get("interview_questions"), f"{audience} (idea: {revised})", outcome)
     notes = {
         "outcome": outcome,
         "revised_idea": revised,
@@ -51,7 +53,7 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         f"## Idea for the next round\n\n{revised}\n\n## Missing evidence\n\n{bullets(notes['missing_evidence'])}\n\n"
         f"## New search queries\n\n{bullets(notes['queries'])}\n\n## Questions for the founder\n\n{bullets(notes['questions'])}\n"
     ))
-    return {"coach_notes": notes, "tokens": usage["tokens"]}
+    return {"coach_notes": notes, "interview_kit": kit, "tokens": usage["tokens"]}
 
 
 def answers_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -75,12 +77,14 @@ def answers_node(state: dict[str, Any]) -> dict[str, Any]:
                                   *(f"{q['question']} {answers[q['field']]}" for q in questions if q["field"] in answers)]
 
     next_round = state.get("round", 1) + 1
+    violations = text_violations({f"founder answer: {k}": v for k, v in answers.items()}, False, next_round)
     log_action(
         agent="coach", action="start_next_round", model=None,
         approved_by="founder" if accepted else None, accepted_revised_idea=accepted,
-        answered=sorted(answers), round=next_round,
+        answered=sorted(answers), round=next_round, guardrail_violations=[v["rule"] for v in violations],
     )
     return {
+        "text_violations": violations,
         "brief": brief,
         "founder_answers": {**(state.get("founder_answers") or {}), **answers},
         "round": next_round,

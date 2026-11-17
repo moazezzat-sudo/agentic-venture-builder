@@ -41,6 +41,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, Send, interrupt
 
 from agents import coach, intake, researcher, scorer, skeptic, subdomain, weigher
+from agents._common import describe_violation, text_violations
 from agents.scorer import current_claims
 from gates import evaluate_gate_1, load_rubric
 from logger import log_action, write_gate, write_output
@@ -147,13 +148,47 @@ def _gate_file(gate: str) -> str:
     return "decision" if gate == GATE_1 else "niche_decision"
 
 
+def current_drafts(state: Briefcase) -> dict[str, str]:
+    """Text our agents wrote for this round, to run through guardrails.check_text before the gate.
+
+    Sourced claims are left out: they report what a source says, not what we claim.
+    ASSUMPTION claims are our own statements, so they are checked.
+    """
+    drafts: dict[str, str] = {}
+    for i, area in enumerate(state.get("areas") or []):
+        drafts[f"area {i}"] = f"{area.get('name', '')}. {area.get('query', '')}"
+    for i, c in enumerate(current_claims(state)):
+        if c.get("support") == "ASSUMPTION":
+            drafts[f"assumption {i}"] = c.get("text", "")
+    for i, check in enumerate(state.get("claim_checks") or []):
+        drafts[f"skeptic check {i}"] = check.get("why", "")
+    for name, note in (state.get("score_notes") or {}).items():
+        drafts[f"score reason: {name}"] = note
+    coach_notes = state.get("coach_notes") or {}
+    if coach_notes:
+        drafts["coach"] = " ".join([coach_notes.get("revised_idea", ""), *coach_notes.get("missing_evidence", []),
+                                    *coach_notes.get("questions", [])])
+    if state.get("subdomain"):
+        drafts["niche"] = state["subdomain"]
+    for i, q in enumerate(state.get("interview_kit") or []):
+        drafts[f"interview question {i + 1}"] = q
+    return drafts
+
+
 def make_gate_eval(gate: str):
     def node(state: Briefcase) -> dict[str, Any]:
-        result = evaluate_gate_1(state["scores"], current_claims(state)).model_copy(update={"gate": gate})
+        round_no = state.get("round", 1)
+        draft_hits = text_violations(current_drafts(state), True, round_no)
+        founder_hits = [v for v in state.get("text_violations") or [] if not v.get("rewritable")]
+        result = evaluate_gate_1(
+            state["scores"], current_claims(state),
+            violations=[describe_violation(v) for v in founder_hits],
+            rewritable_violations=[describe_violation(v) for v in draft_hits],
+        ).model_copy(update={"gate": gate})
         write_gate(1, _gate_file(gate), _gate_markdown(result, None))
         log_action(agent="gate", action=gate, model=None, outcome=result.recommendation, score=result.score,
-                   round=state.get("round", 1))
-        return {"gate_results": [result.model_dump()]}
+                   round=round_no, guardrail_violations=[v["rule"] for v in founder_hits + draft_hits])
+        return {"gate_results": [result.model_dump()], "text_violations": draft_hits}
 
     node.__name__ = f"{gate}_eval"
     return node
@@ -167,6 +202,7 @@ def make_gate_wait(gate: str):
         decision = FounderDecision(**reply)
         if decision.gate != gate or decision.phase != 1:
             raise ValueError(f"decision is for {decision.gate!r}, but the run is waiting at {gate!r}")
+        check_approval(decision, result.recommendation)
         decision = decision.model_copy(update={"overrides_recommendation": decision.outcome != result.recommendation})
         write_gate(1, _gate_file(gate), _gate_markdown(result, decision))
         log_action(agent="gate", action=f"{gate}_founder_decision", model=None, approved_by="founder",
@@ -179,6 +215,14 @@ def make_gate_wait(gate: str):
 
     node.__name__ = f"{gate}_wait"
     return node
+
+
+def check_approval(decision: FounderDecision, recommendation: str) -> None:
+    """Approve keeps the recommended outcome; Reject must pick a different one (team decision, 15:20)."""
+    if decision.approved and decision.outcome != recommendation:
+        raise ValueError(f"approved means keeping the recommendation ({recommendation}); got outcome {decision.outcome!r}")
+    if not decision.approved and decision.outcome == recommendation:
+        raise ValueError(f"rejecting the recommendation ({recommendation}) needs a different outcome")
 
 
 def after_gate(gate: str):
@@ -199,18 +243,38 @@ def round_limit_node(state: Briefcase) -> dict[str, Any]:
     return {"stopped": True, "stop_reason": reason}
 
 
+def run_tokens(run_id: str) -> int:
+    """Tokens for one run = the sum of "tokens" over the decision_log entries since its start_run entry.
+
+    This includes calls logged by other modules (for example the guardrails category check).
+    """
+    import json
+
+    import logger
+
+    path = logger.settings.decision_log_path
+    if not path.exists() or not path.read_text(encoding="utf-8").strip():
+        return 0
+    entries = json.loads(path.read_text(encoding="utf-8"))
+    starts = [i for i, e in enumerate(entries) if e.get("action") == "start_run" and e.get("run_id") == run_id]
+    since = starts[-1] if starts else 0
+    return sum(int(e.get("tokens") or 0) for e in entries[since:])
+
+
 def finish_node(state: Briefcase) -> dict[str, Any]:
     stopped = bool(state.get("stopped"))
-    tokens = state.get("tokens", 0)
+    tokens = run_tokens(state["run_id"])
     phase = 1 if stopped else 2
-    log_action(agent="orchestrator", action="phase1_finished", model=None, stopped=stopped, tokens=tokens,
+    # "run_tokens", not "tokens": this entry reports the total and must not be summed again.
+    log_action(agent="orchestrator", action="phase1_finished", model=None, stopped=stopped, run_tokens=tokens,
                over_token_budget=tokens > TOKEN_BUDGET)
     last = state.get("gate_results", [{}])[-1] if state.get("gate_results") else {}
     write_output(1, 10, "result", (
         "# Phase 1 result\n\n"
         + (f"**Stopped.** {state.get('stop_reason', '')}\n\n" if stopped else "**Phase 1 finished; the founder approved go. Phase 2 (Validate) is next.**\n\n")
         + f"Last gate: {last.get('gate', 'none')}, recommended {str(last.get('recommendation', 'n/a')).upper()}.\n\n"
-        + f"Rounds: {state.get('round', 1)}. Model tokens used: {tokens} (budget {TOKEN_BUDGET}).\n"
+        + f"Rounds: {state.get('round', 1)}. Model tokens used: {tokens}, summed from decision_log.json "
+        f"(budget {TOKEN_BUDGET}).\n"
         + (f"\nNiche: {state['subdomain']}\n" if state.get("subdomain") else "")
     ))
     return {"current_phase": phase}
@@ -339,6 +403,7 @@ def resume_run(run_id: str, decision: Union[FounderDecision, dict[str, Any]]) ->
             raise TypeError("this gate needs the founder's FounderDecision; the run cannot continue without it")
         if decision.gate != waiting["gate"] or decision.phase != waiting["phase"]:
             raise ValueError(f"decision is for {decision.gate!r}, but the run is waiting at {waiting['gate']!r}")
+        check_approval(decision, waiting["recommendation"])
         value: dict[str, Any] = decision.model_dump()
     else:
         if isinstance(decision, FounderDecision) or not isinstance(decision, dict) or not isinstance(decision.get("answers", {}), dict):

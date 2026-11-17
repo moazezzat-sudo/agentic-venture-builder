@@ -172,6 +172,89 @@ def test_pivot_loops_through_coach(run):
     assert all(c["round"] == 2 for c in orchestrator.current_claims(state))
 
 
+def test_interview_kit_on_go_repeat_pivot_not_on_stop(run):
+    kit = run["out"] / "phase1_step9_interview_kit.md"
+    run["model"].score = 1
+    r = orchestrator.start_run(FULL_BRIEF, "kit-stop")
+    orchestrator.resume_run("kit-stop", decide(r, "stop"))
+    assert not kit.exists()
+    run["model"].score = 4
+    r = orchestrator.start_run(FULL_BRIEF, "kit-repeat")
+    orchestrator.resume_run("kit-repeat", decide(r, "repeat", approved=False))
+    assert "after repeat" in kit.read_text(encoding="utf-8")
+
+
+def test_founder_answer_violation_stops_with_violation_shown(run):
+    brief = {k: v for k, v in FULL_BRIEF.items() if k != "target_market"}
+    orchestrator.start_run(brief, "founder-text")
+    r = orchestrator.resume_run("founder-text", {"answers": {"target_market": "guaranteed income of 5000 a month"}})
+    assert r["recommendation"] == "stop"
+    assert any("income_promise" in reason and "founder answer" in reason for reason in r["reasons"])
+
+
+def test_draft_violation_recommends_repeat(run, monkeypatch):
+    model = run["model"]
+
+    def with_bad_reason(agent, *args, **kwargs):
+        text, *rest = FakeModel.__call__(model, agent, *args, **kwargs)
+        if agent == "scorer":
+            data = json.loads(text)
+            data["reasons"]["feasibility"] = "You will earn $5000 per month"
+            text = json.dumps(data)
+        return (text, *rest)
+
+    monkeypatch.setattr(common, "invoke_model", with_bad_reason)
+    r = orchestrator.start_run(FULL_BRIEF, "draft-text")
+    assert r["recommendation"] == "repeat"
+    assert any("Guardrail (draft): income_promise" in reason for reason in r["reasons"])
+
+
+def test_approve_must_keep_and_reject_must_change_the_recommendation(run):
+    r = orchestrator.start_run(FULL_BRIEF, "approval-rule")
+    assert r["recommendation"] == "go"
+    with pytest.raises(ValueError):
+        orchestrator.resume_run("approval-rule", decide(r, "stop", approved=True))
+    with pytest.raises(ValueError):
+        orchestrator.resume_run("approval-rule", decide(r, "go", approved=False))
+    assert orchestrator.pending("approval-rule")["gate"] == "gate_1"
+
+
+def test_run_total_is_the_sum_of_log_tokens(run):
+    run["model"].score = 1
+    r = orchestrator.start_run(FULL_BRIEF, "tokens")
+    orchestrator.resume_run("tokens", decide(r, "stop"))
+    entries = log_entries(run)
+    start = max(i for i, e in enumerate(entries) if e["action"] == "start_run" and e.get("run_id") == "tokens")
+    total = sum(e.get("tokens") or 0 for e in entries[start:])
+    assert total > 0 and orchestrator.run_tokens("tokens") == total
+    assert f"Model tokens used: {total}," in (run["out"] / "phase1_step10_result.md").read_text(encoding="utf-8")
+    model_calls = [e for e in entries if e["model"] is not None]
+    assert model_calls and all("tokens" in e for e in model_calls)
+
+
+def test_regulation_and_market_claims_need_tier_a_or_b():
+    from agents.researcher import build_claims
+
+    sources = [{"url": "https://forum.example.org/t", "tier": "D"}, {"url": "https://agency.example.gov/rule", "tier": "A"}]
+    raw = [{"text": "A licence is required", "source": 0, "criterion": "rules_risk"},
+           {"text": "A licence is required", "source": 1, "criterion": "rules_risk"},
+           {"text": "The market is big", "source": 0, "criterion": "market"}]
+    weak_reg, strong_reg, weak_market = build_claims(raw, sources, 1)
+    assert weak_reg["area"] is None and "not usable as evidence on regulation" in weak_reg["text"]
+    assert strong_reg["area"] == "rules_risk"
+    assert weak_market["area"] is None
+
+
+def test_competition_zero_needs_a_sourced_competitor_claim():
+    from agents.scorer import clean_scores
+
+    zero = {c: 3 for c in CRITERIA} | {"competition": 0}
+    scores, notes = clean_scores(zero, {}, [])
+    assert scores["competition"] == 1 and "raised to 1" in notes["competition"]
+    claim = {"text": "Free tool X does this", "support": "url", "url": "https://x.example.com", "tier": "B", "area": "competition"}
+    assert clean_scores(zero, {}, [claim])[0]["competition"] == 0
+
+
 def test_model_cannot_invent_sources(run):
     orchestrator.start_run(FULL_BRIEF, "sources")
     state = orchestrator.get_graph().get_state(orchestrator._config("sources")).values
