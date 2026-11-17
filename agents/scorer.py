@@ -227,7 +227,9 @@ def make_node(step: int, name: str):
             "claims_by_type": grouped_claims(claims),
             "skeptic_checks": state.get("claim_checks") or [],
         }
-        data, usage = ask_json("scorer", payload, role="smart", max_tokens=1000, temperature=0, expect=("criteria",))
+        # Any shape normalize_scores understands counts as an answer; only an echo of the input is retried.
+        data, usage = ask_json("scorer", payload, role="smart", max_tokens=1000, temperature=0,
+                               expect=("criteria", "scores", "rubric", *MODEL_CRITERIA))
         scores, notes, cited, incomplete = clean_scores(normalize_scores(data), claims, state)
 
         log_action(
