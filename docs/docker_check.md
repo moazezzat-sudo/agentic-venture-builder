@@ -15,7 +15,7 @@ Files a check run writes (`decision_log.json`, `outputs/phase1_*`) are test outp
    ollama list
    ```
 
-   `qwen3:8b` must be listed. If it is not: `ollama pull qwen3:8b`.
+   `qwen3:4b` must be listed. If it is not: `ollama pull qwen3:4b`.
 
 2. **Fresh clone** into a new folder, so nothing from your working copy leaks in:
 
@@ -30,7 +30,7 @@ Files a check run writes (`decision_log.json`, `outputs/phase1_*`) are test outp
    ```powershell
    @"
    LLM_PROVIDER=ollama
-   OLLAMA_MODEL=qwen3:8b
+   OLLAMA_MODEL=qwen3:4b
    OLLAMA_BASE_URL=http://host.docker.internal:11434
    "@ | Set-Content -Encoding ascii .env
    ```
@@ -41,9 +41,9 @@ Files a check run writes (`decision_log.json`, `outputs/phase1_*`) are test outp
    docker compose up --build --no-deps app
    ```
 
-   Plain `docker compose up` also works, but it first downloads the bundled model (several GB) even though the app will use your native Ollama.
+   Plain `docker compose up` also works, but it first downloads the bundled model (about 2.5 GB) even though the app will use your native Ollama.
 
-5. **Open** `http://localhost:8000`. The sidebar must say provider `ollama`, model `qwen3:8b`.
+5. **Open** `http://localhost:8000`. The sidebar must say provider `ollama`, model `qwen3:4b`.
 
 6. **Run one brief.** Idea: `A library of printable lesson-plan templates in Arabic for private English tutors in Egypt`, location `Egypt`. Leave the rest blank.
    - The intake questions appear: answer them, click **Send answers and start the research**.
@@ -96,13 +96,13 @@ Files a check run writes (`decision_log.json`, `outputs/phase1_*`) are test outp
    docker compose up --build
    ```
 
-   The app starts at once; it does not wait for the model. On the first start `model-pull` downloads `qwen3:8b` (about 5 GB) into the `ollama_data` volume in the background and exits with code 0 when done. Later starts reuse the volume. Follow the download in a second window:
+   The app starts at once; it does not wait for the model. On the first start `model-pull` downloads `qwen3:4b` (about 2.5 GB) into the `ollama_data` volume in the background and exits with code 0 when done. Later starts reuse the volume. Follow the download in a second window:
 
    ```powershell
    docker compose logs -f model-pull
    ```
 
-3. **Open** `http://localhost:8000` right away. The sidebar must say provider `ollama`, model `qwen3:8b`. While the model downloads, the page must show "Local model still downloading: `qwen3:8b` (about 5 GB) … `docker compose logs -f model-pull`", with a **Retry** button, and **Start Phase 1** greyed out. When the download finishes, the message goes away by itself within about 15 seconds (or click **Retry**).
+3. **Open** `http://localhost:8000` right away. The sidebar must say provider `ollama`, model `qwen3:4b`. While the model downloads, the page must show "Local model still downloading: `qwen3:4b` (about 2.5 GB) … `docker compose logs -f model-pull`", with a **Retry** button, and **Start Phase 1** greyed out. When the download finishes, the message goes away by itself within about 15 seconds (or click **Retry**).
 
    Also check: `docker compose stop ollama` while the app runs must give "The local model server is not answering yet … `docker compose up -d ollama model-pull`", not an error page. Start it again with `docker compose up -d ollama`.
 
@@ -114,7 +114,7 @@ Files a check run writes (`decision_log.json`, `outputs/phase1_*`) are test outp
 
 | Check | A (native) | B (bundled) |
 |---|---|---|
-| App opens on `localhost:8000`, sidebar shows `ollama` / `qwen3:8b` | | |
+| App opens on `localhost:8000`, sidebar shows `ollama` / `qwen3:4b` | | |
 | B only: app opens during the download, shows the download message, unlocks by itself | — | |
 | B only: `docker compose stop ollama` gives the "not answering" message | — | |
 | Brief → intake questions → progress box → gate card | | |

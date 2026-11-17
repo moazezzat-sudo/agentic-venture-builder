@@ -8,7 +8,7 @@ An open-source team of AI agents that takes a founder's brief toward a sellable 
 docker compose up
 ```
 
-Then open `http://localhost:8000`, fill in your brief, and answer the follow-up questions and gates in the founder web app. No account or key is needed. The app opens at once; on the first start the local open-weight model (`qwen3:8b`, about 5 GB) downloads in the background, and the app says so until it is ready (progress: `docker compose logs -f model-pull`). On a slow connection, set `OLLAMA_MODEL=qwen3:4b` in `.env` for a model about half the size. With a free `GROQ_API_KEY` in `.env` the app works immediately, without waiting for the download.
+Then open `http://localhost:8000`, fill in your brief, and answer the follow-up questions and gates in the founder web app. No account or key is needed. The app opens at once; on the first start the local open-weight model (`qwen3:4b`, about 2.5 GB) downloads in the background, and the app says so until it is ready (progress: `docker compose logs -f model-pull`). With more memory, set `OLLAMA_MODEL=qwen3:8b` in `.env` for a stronger model about twice the size. With a free `GROQ_API_KEY` in `.env` the app works immediately, without waiting for the download.
 
 Already running Ollama on your machine (for example Ollama for Windows with a GPU)? Copy `.env.example` to `.env`, set `OLLAMA_BASE_URL=http://host.docker.internal:11434`, and start only the app with `docker compose up --no-deps app`.
 
@@ -39,7 +39,7 @@ The system runs six phases in order: Discover, Validate, Build, Commercial setup
 
 ## Models and free resources
 
-- **Default: fully local.** The open-weight `qwen3:8b` runs on your machine through [Ollama](https://ollama.com/library/qwen3); `docker compose up` downloads it, or point the app at an Ollama you already run (see Quickstart). No account, key or payment. Settings are in `.env.example`: `OLLAMA_MODEL`, an optional smaller `OLLAMA_FAST_MODEL` for light steps, an 8,192-token context, and qwen3's thinking mode turned off for speed.
+- **Default: fully local.** The open-weight `qwen3:4b` runs on your machine through [Ollama](https://ollama.com/library/qwen3); `docker compose up` downloads it, or point the app at an Ollama you already run (see Quickstart). No account, key or payment. Settings are in `.env.example`: `OLLAMA_MODEL`, an optional smaller `OLLAMA_FAST_MODEL` for light steps, an 8,192-token context, and qwen3's thinking mode turned off for speed.
 - **With no model reachable** (no Groq key and no Ollama running), briefs with an ambiguous keyword such as "crypto", "supplements", "handmade" or "lending" are blocked to be safe, because the guardrail can't ask the model whether the product is allowed; the bundled Ollama from `docker compose up` avoids this.
 - **Optional: Groq free tier.** Set `LLM_PROVIDER=groq` (or `auto` with a key) and a free `GROQ_API_KEY` from [console.groq.com/keys](https://console.groq.com/keys) to use the open-weight `openai/gpt-oss-120b` and `openai/gpt-oss-20b` served by [Groq](https://console.groq.com/docs/models). Never required; no payment details are needed for the free tier.
 - The model choice is backed by our own measurements in `evals/model_choice.md` (in progress).

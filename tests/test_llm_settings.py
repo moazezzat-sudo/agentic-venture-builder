@@ -93,7 +93,7 @@ def test_compose_keeps_the_fallback_model_services(compose):
     services = compose["services"]
     assert {"ollama", "model-pull", "app"} <= set(services)
     assert "ports" not in services["ollama"]  # never clashes with a native Ollama on 11434
-    assert "${OLLAMA_MODEL:-qwen3:8b}" in " ".join(services["model-pull"]["entrypoint"])
+    assert "${OLLAMA_MODEL:-qwen3:4b}" in " ".join(services["model-pull"]["entrypoint"])
     assert services["app"]["command"].startswith("streamlit run app.py --server.port 8000 --server.address 0.0.0.0")
 
 
@@ -102,7 +102,7 @@ def test_compose_app_never_waits_for_the_model_download(compose):
     assert "model-pull" not in deps  # the download runs in the background
     assert deps["ollama"]["condition"] == "service_started"
     assert deps["ollama"].get("required") is False  # the app starts even if ollama is stopped
-    assert "OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:8b}" in compose["services"]["app"]["environment"]
+    assert "OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:4b}" in compose["services"]["app"]["environment"]
 
 
 def test_compose_writes_decision_log_to_a_mounted_folder(compose):

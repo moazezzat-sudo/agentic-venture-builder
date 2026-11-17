@@ -37,7 +37,7 @@ class Settings:
     groq_fast_model: str = _env("GROQ_FAST_MODEL", "openai/gpt-oss-20b")
     llm_max_retries: int = int(_env("LLM_MAX_RETRIES", "6"))
     ollama_base_url: str = _env("OLLAMA_BASE_URL", "http://localhost:11434")
-    ollama_model: str = _env("OLLAMA_MODEL", "qwen3:8b")
+    ollama_model: str = _env("OLLAMA_MODEL", "qwen3:4b")
     # Model for role="fast" with Ollama; empty means OLLAMA_MODEL (one model to pull).
     ollama_fast_model: str = _env("OLLAMA_FAST_MODEL", "")
     ollama_num_ctx: int = int(_env("OLLAMA_NUM_CTX", "8192"))

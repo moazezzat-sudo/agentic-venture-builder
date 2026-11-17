@@ -16,7 +16,7 @@ services:
 
   # Downloads the open-weight model(s) once (kept in the ollama_data volume), in the
   # background: the app does not wait for it. Choose the model with OLLAMA_MODEL in .env
-  # (default qwen3:8b, about 5 GB; qwen3:4b is about half for slow connections).
+  # (default qwen3:4b, about 2.5 GB; qwen3:8b is larger, about 5 GB, and stronger).
   # Progress: docker compose logs -f model-pull
   model-pull:
     image: ollama/ollama:latest
@@ -28,7 +28,7 @@ services:
     entrypoint:
       - sh
       - -c
-      - ollama pull ${OLLAMA_MODEL:-qwen3:8b} && if [ -n "${OLLAMA_FAST_MODEL:-}" ]; then ollama pull ${OLLAMA_FAST_MODEL:-}; fi
+      - ollama pull ${OLLAMA_MODEL:-qwen3:4b} && if [ -n "${OLLAMA_FAST_MODEL:-}" ]; then ollama pull ${OLLAMA_FAST_MODEL:-}; fi
     restart: "no"
 
   app:
@@ -45,7 +45,7 @@ services:
     environment:
       - LLM_PROVIDER=${LLM_PROVIDER:-auto}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:8b}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:4b}
       - OLLAMA_FAST_MODEL=${OLLAMA_FAST_MODEL:-}
       - DECISION_LOG_PATH=/repo/decision_log.json
     extra_hosts:
