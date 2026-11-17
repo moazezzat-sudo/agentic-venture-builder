@@ -1,11 +1,11 @@
 """Run Phase 1 evaluation briefs to Gate 1 and record what Gate 1 recommends.
 
-    python evals/briefs/run_briefs.py weak          # or: strong, banned, all, or brief ids (W1 S2 ...)
+    python evals/briefs/run_briefs.py weak banned --repeat 2   # or: strong, all, or brief ids (W1 S2 ...)
 
 Each brief runs with the configured model (see .env) up to the first founder pause. Nothing is
 decided for the founder: the run is left paused at Gate 1. Outputs, the decision log and checkpoints
 go to a temporary folder, never to outputs/ or decision_log.json. The results are written to
-evals/briefs/results.md (overwritten each time), and printed.
+evals/briefs/brief_runs.json and RESULTS.md (overwritten each time), and printed.
 """
 
 from __future__ import annotations
@@ -27,9 +27,11 @@ os.environ["OUTPUTS_DIR"] = str(TMP / "outputs")
 os.environ["DECISION_LOG_PATH"] = str(TMP / "decision_log.json")
 os.environ["CHECKPOINT_DB"] = str(TMP / "checkpoints.sqlite")
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(HERE))
 
 import orchestrator  # noqa: E402
 from config import settings  # noqa: E402
+from results_md import render  # noqa: E402
 
 
 def select(briefs: list[dict], args: list[str]) -> list[dict]:
@@ -60,46 +62,34 @@ def run_one(item: dict) -> dict:
     ok = (got == "stop") if item["expect"] == "stop" else (got not in ("stop", "error", "paused for questions"))
     return {"id": item["id"], "set": item["set"], "kind": item.get("kind", ""), "expect": item["expect"], "got": got,
             "ok": ok, "score": score, "reasons": reasons, "seconds": seconds,
-            "tokens": orchestrator.run_tokens(run_id), "idea": item["brief"]["idea"]}
+            "tokens": orchestrator.run_tokens(run_id), "idea": item["brief"]["idea"], "researched": researched(run_id)}
 
 
-def write_results(rows: list[dict]) -> Path:
-    lines = [
-        "# Phase 1 brief evaluation: Gate 1 recommendations",
-        "",
-        f"Run at {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC with `{settings.provider}` "
-        f"(`{settings.model_name('smart')}` / `{settings.model_name('fast')}`), real web search. "
-        "Produced by `python evals/briefs/run_briefs.py`; briefs in `evals/briefs/briefs.json`. "
-        "Each run stops at Gate 1 with no founder decision made.",
-        "",
-        f"**{sum(r['ok'] for r in rows)} of {len(rows)} as expected.**",
-        "",
-        "| Brief | Set | Expected | Got | Score | As expected | Seconds | Tokens |",
-        "|---|---|---|---|---|---|---|---|",
-    ]
-    for r in rows:
-        score = f"{r['score']:.2f}" if isinstance(r["score"], (int, float)) else "n/a"
-        lines.append(f"| {r['id']}: {r['idea']} | {r['set']}{' (' + r['kind'] + ')' if r['kind'] else ''} | "
-                     f"{r['expect']} | {r['got']} | {score} | {'yes' if r['ok'] else '**no**'} | {r['seconds']} | {r['tokens']} |")
-    lines += ["", "## Gate 1 reasons", ""]
-    for r in rows:
-        lines.append(f"**{r['id']}** ({r['got']}):")
-        lines += [f"- {reason}" for reason in r["reasons"]] or ["- none given"]
-        lines.append("")
-    path = HERE / "results.md"
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+def researched(run_id: str) -> bool:
+    """Whether any research step ran (a banned idea must stop before research)."""
+    entries = json.loads((TMP / "decision_log.json").read_text(encoding="utf-8"))
+    return any(e.get("run_id") == run_id and e.get("agent") == "researcher" for e in entries)
 
 
 def main(args: list[str]) -> int:
+    repeat, strong_once = 1, "--strong-once" in args  # --strong-once: repeat only the briefs expected to stop
+    args = [a for a in args if a != "--strong-once"]
+    if "--repeat" in args:
+        i = args.index("--repeat")
+        repeat, args = int(args[i + 1]), args[:i] + args[i + 2:]
     briefs = json.loads((HERE / "briefs.json").read_text(encoding="utf-8"))["briefs"]
     rows = []
     for item in select(briefs, args):
-        row = run_one(item)
-        rows.append(row)
-        print(f"{row['id']}: expected {row['expect']}, got {row['got']} "
-              f"({'ok' if row['ok'] else 'NOT AS EXPECTED'}), {row['seconds']}s, {row['tokens']} tokens", flush=True)
-    print(f"results: {write_results(rows)}  (run files in {TMP})")
+        for n in range(1, (1 if strong_once and item["set"] == "strong" else repeat) + 1):
+            row = {**run_one(item), "run": n}
+            rows.append(row)
+            print(f"{row['id']} run {n}: expected {row['expect']}, got {row['got']} "
+                  f"({'ok' if row['ok'] else 'NOT AS EXPECTED'}), {row['seconds']}s, {row['tokens']} tokens, "
+                  f"research ran: {row['researched']}", flush=True)
+    data = {"ran_at": f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC", "provider": settings.provider,
+            "models": [settings.model_name("smart"), settings.model_name("fast")], "repeat": repeat, "rows": rows}
+    (HERE / "brief_runs.json").write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"results: {render()}  (run files in {TMP})")
     return 0 if all(r["ok"] for r in rows) else 1
 
 

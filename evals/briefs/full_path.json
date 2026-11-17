@@ -1,0 +1,102 @@
+{
+  "ran_at": "2026-11-17 16:28 UTC",
+  "brief": "S1",
+  "run_id": "full-S1-1794932842",
+  "provider": "groq",
+  "models": [
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b"
+  ],
+  "ended": {
+    "stopped": false,
+    "phase": 6
+  },
+  "gates": [
+    {
+      "gate": "gate_1",
+      "phase": 1,
+      "recommended": "repeat",
+      "chose": "go",
+      "override": true
+    },
+    {
+      "gate": "gate_1_niche",
+      "phase": 1,
+      "recommended": "stop",
+      "chose": "go",
+      "override": true
+    },
+    {
+      "gate": "gate_2",
+      "phase": 2,
+      "recommended": "repeat",
+      "chose": "go",
+      "override": true
+    },
+    {
+      "gate": "gate_3_plan",
+      "phase": 3,
+      "recommended": "go",
+      "chose": "go",
+      "override": false
+    },
+    {
+      "gate": "gate_3",
+      "phase": 3,
+      "recommended": "go",
+      "chose": "go",
+      "override": false
+    },
+    {
+      "gate": "gate_4",
+      "phase": 4,
+      "recommended": "repeat",
+      "chose": "go",
+      "override": true
+    },
+    {
+      "gate": "gate_5",
+      "phase": 5,
+      "recommended": "go",
+      "chose": "go",
+      "override": false
+    },
+    {
+      "gate": "gate_6",
+      "phase": 6,
+      "recommended": "repeat",
+      "chose": "go",
+      "override": true
+    }
+  ],
+  "per_phase": {
+    "1": {
+      "seconds": 19.8,
+      "tokens": 11166
+    },
+    "2": {
+      "seconds": 2.3,
+      "tokens": 1577
+    },
+    "3": {
+      "seconds": 6.4,
+      "tokens": 4156
+    },
+    "4": {
+      "seconds": 7.5,
+      "tokens": 1615
+    },
+    "5": {
+      "seconds": 11.8,
+      "tokens": 1610
+    },
+    "6": {
+      "seconds": 6.6,
+      "tokens": 791
+    }
+  },
+  "total": {
+    "seconds": 54.5,
+    "tokens": 20915
+  }
+}

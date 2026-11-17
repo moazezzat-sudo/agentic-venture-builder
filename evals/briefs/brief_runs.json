@@ -1,0 +1,206 @@
+{
+  "ran_at": "2026-11-17 16:27 UTC",
+  "provider": "groq",
+  "models": [
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b"
+  ],
+  "repeat": 2,
+  "rows": [
+    {
+      "id": "S1",
+      "set": "strong",
+      "kind": "",
+      "expect": "not stop",
+      "got": "repeat",
+      "ok": true,
+      "score": 2.1,
+      "reasons": [
+        "Weighted score 2.10 is between 2.0 and 2.8; problem evidence (2) is too thin, so more evidence is needed.",
+        "Weakest criteria: market 1, competition 1."
+      ],
+      "seconds": 9.5,
+      "tokens": 7743,
+      "idea": "Interview-scheduling SaaS for SMEs in Egypt",
+      "researched": true,
+      "run": 1
+    },
+    {
+      "id": "S2",
+      "set": "strong",
+      "kind": "",
+      "expect": "not stop",
+      "got": "stop",
+      "ok": false,
+      "score": 2.15,
+      "reasons": [
+        "competition scored 0, which stops the idea whatever the total."
+      ],
+      "seconds": 6.7,
+      "tokens": 8228,
+      "idea": "An online table-booking widget for restaurants and cafés",
+      "researched": true,
+      "run": 1
+    },
+    {
+      "id": "S3",
+      "set": "strong",
+      "kind": "",
+      "expect": "not stop",
+      "got": "repeat",
+      "ok": true,
+      "score": 2.05,
+      "reasons": [
+        "Weighted score 2.05 is between 2.0 and 2.8; problem evidence (2) is too thin, so more evidence is needed.",
+        "Weakest criteria: market 0, competition 1."
+      ],
+      "seconds": 9.4,
+      "tokens": 6509,
+      "idea": "A CV and portfolio builder for fresh graduates",
+      "researched": true,
+      "run": 1
+    },
+    {
+      "id": "W1",
+      "set": "weak",
+      "kind": "free tool already solves it",
+      "expect": "stop",
+      "got": "stop",
+      "ok": true,
+      "score": 1.45,
+      "reasons": [
+        "problem_evidence scored 0, which stops the idea whatever the total.",
+        "competition scored 0, which stops the idea whatever the total."
+      ],
+      "seconds": 15.7,
+      "tokens": 6706,
+      "idea": "A website that converts PDF files to Word documents",
+      "researched": true,
+      "run": 1
+    },
+    {
+      "id": "W1",
+      "set": "weak",
+      "kind": "free tool already solves it",
+      "expect": "stop",
+      "got": "stop",
+      "ok": true,
+      "score": 1.45,
+      "reasons": [
+        "problem_evidence scored 0, which stops the idea whatever the total.",
+        "competition scored 0, which stops the idea whatever the total."
+      ],
+      "seconds": 23.6,
+      "tokens": 6686,
+      "idea": "A website that converts PDF files to Word documents",
+      "researched": true,
+      "run": 2
+    },
+    {
+      "id": "W2",
+      "set": "weak",
+      "kind": "no evidence of the pain",
+      "expect": "stop",
+      "got": "stop",
+      "ok": true,
+      "score": 1.7,
+      "reasons": [
+        "competition scored 0, which stops the idea whatever the total."
+      ],
+      "seconds": 21.7,
+      "tokens": 7213,
+      "idea": "An app that reminds people to water their artificial plants",
+      "researched": true,
+      "run": 1
+    },
+    {
+      "id": "W2",
+      "set": "weak",
+      "kind": "no evidence of the pain",
+      "expect": "stop",
+      "got": "stop",
+      "ok": true,
+      "score": 1.7,
+      "reasons": [
+        "competition scored 0, which stops the idea whatever the total."
+      ],
+      "seconds": 21.6,
+      "tokens": 7234,
+      "idea": "An app that reminds people to water their artificial plants",
+      "researched": true,
+      "run": 2
+    },
+    {
+      "id": "W3",
+      "set": "weak",
+      "kind": "poor founder fit",
+      "expect": "stop",
+      "got": "stop",
+      "ok": true,
+      "score": 0.95,
+      "reasons": [
+        "Weighted score 0.95 is below 2.0.",
+        "Weakest criteria: market 0, founder_fit 0.",
+        "Target missed: founder fit 0 is below 2."
+      ],
+      "seconds": 22.7,
+      "tokens": 6890,
+      "idea": "A route-optimisation SaaS for shipping and logistics companies",
+      "researched": true,
+      "run": 1
+    },
+    {
+      "id": "W3",
+      "set": "weak",
+      "kind": "poor founder fit",
+      "expect": "stop",
+      "got": "stop",
+      "ok": true,
+      "score": 1.3,
+      "reasons": [
+        "Weighted score 1.30 is below 2.0.",
+        "Weakest criteria: founder_fit 0, feasibility 0.",
+        "Target missed: founder fit 0 is below 2."
+      ],
+      "seconds": 29.0,
+      "tokens": 7501,
+      "idea": "A route-optimisation SaaS for shipping and logistics companies",
+      "researched": true,
+      "run": 2
+    },
+    {
+      "id": "B1",
+      "set": "banned",
+      "kind": "",
+      "expect": "stop",
+      "got": "stop",
+      "ok": true,
+      "score": null,
+      "reasons": [
+        "Financial, investment and crypto products are banned: the system can't build products that handle, invest or advise on money or digital assets. (Rule matched: \"buy fractions of Bitcoin\".)"
+      ],
+      "seconds": 0.3,
+      "tokens": 0,
+      "idea": "A mobile app that lets people buy fractions of Bitcoin with their phone credit",
+      "researched": false,
+      "run": 1
+    },
+    {
+      "id": "B1",
+      "set": "banned",
+      "kind": "",
+      "expect": "stop",
+      "got": "stop",
+      "ok": true,
+      "score": null,
+      "reasons": [
+        "Financial, investment and crypto products are banned: the system can't build products that handle, invest or advise on money or digital assets. (Rule matched: \"buy fractions of Bitcoin\".)"
+      ],
+      "seconds": 0.2,
+      "tokens": 0,
+      "idea": "A mobile app that lets people buy fractions of Bitcoin with their phone credit",
+      "researched": false,
+      "run": 2
+    }
+  ]
+}
