@@ -430,7 +430,7 @@ def evaluate_gate_6(draft: Mapping[str, Any]) -> GateResult:
     rec = draft.get("recommendation")
     outcome: Outcome = rec if rec in ("go", "repeat", "pivot", "stop") else "repeat"
     reasons = [str(draft["why"])] if draft.get("why") else ["No reason given."]
-    if draft.get("mocked"):
+    if draft.get("mocked") and not any("MOCKED" in r for r in reasons):
         reasons.append("The sales data is MOCKED: there are no real customers yet.")
     outcome, reasons = _with_violations(outcome, reasons, draft)
     summary = "Metrics from MOCKED sales." if draft.get("mocked") else "Metrics from the store."
