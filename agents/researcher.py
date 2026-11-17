@@ -36,14 +36,23 @@ def _stubbed_tools() -> list[str]:
     return [m.__name__ for m in (search, credibility, worldbank) if getattr(m, "STUBBED", False)]
 
 
+# Search-engine ads and click redirects: not a source anyone can cite or check.
+AD_URL = re.compile(
+    r"^https?://([^/]*\.)?(bing\.com/aclick|google\.[a-z.]+/aclk|googleadservices\.com|doubleclick\.net"
+    r"|duckduckgo\.com/y\.js|r\.search\.yahoo\.com)", re.I,
+)
+
+
 def find_sources(query: str) -> list[dict[str, Any]]:
-    """Search and rate. Returns [{i, title, url, snippet, tier}]. Skips results without an http(s) URL."""
+    """Search and rate. Returns [{i, title, url, snippet, tier}]. Skips ads, redirects and non-http(s) URLs."""
     from tools.credibility import rate
     from tools.search import search
 
     sources = []
     for r in search(query, max_results=MAX_RESULTS)[:MAX_RESULTS]:
         url = str(r.get("url", ""))
+        if AD_URL.match(url):
+            continue
         try:
             tier = rate(url)
         except ValueError:
@@ -106,6 +115,7 @@ def research(area: dict[str, Any], brief: dict[str, Any], round_no: int) -> tupl
     if sources:
         payload = {
             "idea": cut(brief.get("idea"), 300), "location": brief.get("location"), "area": area["name"],
+            "looking_for": area.get("focus", "problem"),
             "sources": [{k: s[k] for k in ("i", "tier", "title", "snippet")} for s in sources],
         }
         data, usage = ask_json("researcher", payload, role="fast", max_tokens=450)
