@@ -1,0 +1,62 @@
+# Evaluation rubric for Phase 1 (PLAN.md section 3b) and the Gate 1 targets (section 4).
+#
+# Fixed before any run. gates.py reads this file and applies the rules in plain
+# Python; the model only proposes a 0-4 score per criterion, never the outcome.
+#
+# The criteria borrow ideas from Lean Canvas (Ash Maurya) and The Mom Test
+# (Rob Fitzpatrick). The weights and cut-offs are our own design choices.
+
+scale:
+  min: 0
+  max: 4
+
+criteria:
+  problem_evidence:
+    weight: 0.20
+    asks: "Is the pain real, frequent and costly?"
+    evidence: "Several independent sources; tier D counts only as a signal"
+  market:
+    weight: 0.15
+    asks: "Are there enough reachable customers in the target location?"
+    evidence: "Tier A/B numbers"
+  competition:
+    weight: 0.15
+    asks: "Who already solves it, and what is clearly better here?"
+    evidence: "Competitor pages (tier B)"
+  founder_fit:
+    weight: 0.15
+    asks: "Do the skills, experience and team match what the idea needs?"
+    evidence: "The founder's answers"
+  feasibility:
+    weight: 0.15
+    asks: "Can the MVP be built with this budget, time and skill set?"
+    evidence: "The founder's answers + build estimate"
+  willingness_to_pay:
+    weight: 0.10
+    asks: "Is there evidence people pay for this kind of solution?"
+    evidence: "Competitor prices, paid alternatives"
+  rules_risk:
+    weight: 0.10
+    asks: "Allowed category, regulation, ethics"
+    evidence: "Guardrails + tier A sources"
+
+decision:
+  go_min: 2.8             # weighted total >= 2.8 -> go
+  stop_below: 2.0         # weighted total < 2.0 -> stop; between -> repeat or pivot
+  stop_if_zero:           # any 0 here -> stop, whatever the total
+    - problem_evidence
+    - rules_risk
+  cap_unsourced_share: 0.5    # more than half the claims unsourced -> no better than repeat
+  # Our choice for "mostly ASSUMPTIONs" (section 4, Gate 1 stop condition).
+  stop_unsourced_share: 0.75
+  # In the repeat/pivot band: the pain is real (problem_evidence at or above this)
+  # but the idea as framed scores low -> pivot. Otherwise more evidence is needed -> repeat.
+  pivot_problem_min: 3
+
+gate_1:
+  target: >-
+    At least 3 independent source URLs showing the pain; at least 50% of claims
+    sourced; founder fit acceptable
+  min_pain_sources: 3     # distinct domains among problem_evidence claims with a URL
+  min_sourced_share: 0.5
+  min_founder_fit: 2      # founder_fit score at or above this counts as acceptable
