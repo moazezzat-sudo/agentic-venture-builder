@@ -200,10 +200,10 @@ def normalize_scores(data: Any) -> dict[str, Any]:
 
 
 def free_competitor_claims(claims: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Sourced competitor claims that say the tool is free (a plain word check, not a judgement)."""
+    """Sourced claims that say an existing tool is free (a plain word check, not a judgement)."""
     return [
         c for c in claims
-        if c.get("area") == "competition" and c.get("support") == "url"
+        if c.get("area") in ("competition", "problem_evidence") and c.get("support") == "url"
         and re.search(r"\bfree\b", c.get("text", ""), re.I)
         and not re.search(r"\bfree (trial|plan for \d|for \d+ days)\b", c.get("text", ""), re.I)
     ]

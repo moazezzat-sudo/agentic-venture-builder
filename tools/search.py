@@ -45,7 +45,7 @@ STUBBED = False
 
 DEFAULT_MAX_RESULTS = 3
 SNIPPET_CHARS = 300
-TIMEOUT_SECONDS = 10
+TIMEOUT_SECONDS = 5
 # ddgs text backends, in order. Grokipedia (AI-written) is left out on purpose, and Wikipedia
 # goes through its own API below. Names are checked, because ddgs silently swaps an unknown
 # backend for "auto", which would mislabel the engine that answered.

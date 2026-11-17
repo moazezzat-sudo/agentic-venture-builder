@@ -192,8 +192,8 @@ def evaluate_gate_1(
         evidence_stop = (
             result.recommendation == "stop" and not [v for v in (violations or []) if v]
             and clean["competition"] != 0 and clean["rules_risk"] != 0
-            # No pain evidence is held at repeat only if the pain searches themselves failed.
-            and not (clean["problem_evidence"] == 0 and not any("pain" in g or "problem" in g for g in gaps))
+            # An evidence stop is held at repeat only if the pain/problem searches themselves had an outage.
+            and any("pain" in g or "problem" in g for g in gaps)
         )
         if evidence_stop:
             reasons = [*result.reasons,

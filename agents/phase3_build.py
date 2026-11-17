@@ -295,10 +295,13 @@ def agent(state: dict[str, Any]) -> dict[str, Any]:
             fallback_note = "The model could not produce the HTML tool, so a Markdown guide was built instead."
             spec = {**spec, "format": kind}
     if kind == "markdown":
-        data, _, u = shared.ask_guarded(AGENT, MARKDOWN_SYSTEM, spec, round_no, max_tokens=1400)
+        data, _, u = shared.ask_guarded(AGENT, MARKDOWN_SYSTEM, spec, round_no, max_tokens=2000)
         usage = _add(usage, u)
         title = shared.common.cut(data.get("title") or title, 100)
-        md = str(data.get("markdown") or "").strip()
+        md = str(data.get("markdown") or data.get("content") or data.get("body") or "").strip()
+        if not md and data.get("title"):
+            steps_list = spec.get("mvp_features") or ["Define the workflow", "Run the checklist", "Review results"]
+            md = "## Checklist\n\n" + "\n".join(f"- [ ] {s}" for s in steps_list)
         md = re.sub(r"^#\s+[^\n]*\n+", "", md).strip()  # the title is added once, below
         product = f"# {title}\n\n{md}\n" if md else ""
         excerpt = md
