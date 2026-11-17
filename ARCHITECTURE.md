@@ -2,24 +2,24 @@
 
 ## Overview
 
-Agentic Venture Builder is a team of AI agents that acts as a skeptical cofounder. It takes a founder's brief, checks the idea against rated evidence instead of believing it, and says plainly when the evidence is too weak (STOP). It then drafts the next steps toward a sellable **digital** product. Six phases run in order: Discover, Validate, Build, Commercial setup, Sell/deliver/get paid, and Operate and learn. Each phase ends at a gate. The gate's recommendation (go / repeat / pivot / stop) comes from fixed rules in plain Python ([`gates.py`](gates.py), [`rubric.yaml`](rubric.yaml)), never from the model. Nothing moves on until the founder approves or rejects it in code ([`orchestrator.py`](orchestrator.py), [`approval.py`](approval.py)). Every agent action is appended to `decision_log.json` ([`logger.py`](logger.py)), and every result is written to `outputs/`. Every claim carries a source URL with a credibility tier, a pointer to our own evidence, or the label `ASSUMPTION`. Phase 1 runs as a LangGraph graph. The Phase 2–6 agents exist as drafts and are not yet wired into the graph, so they are STUBBED. Payments are MOCKED.
+Agentic Venture Builder is a team of AI agents that acts as a skeptical cofounder. It takes a founder's brief, checks the idea against rated evidence instead of believing it, and says plainly when the evidence is too weak (STOP). It then drafts the next steps toward a sellable **digital** product. Six phases run in order: Discover, Validate, Build, Commercial setup, Sell/deliver/get paid, and Operate and learn. Each phase ends at a gate. The gate's recommendation (go / repeat / pivot / stop) comes from fixed rules in plain Python ([`gates.py`](gates.py), [`rubric.yaml`](rubric.yaml)), never from the model. Nothing moves on until the founder approves or rejects it in code ([`orchestrator.py`](orchestrator.py), [`approval.py`](approval.py)). Every agent action is appended to `decision_log.json` ([`logger.py`](logger.py)), and every result is written to `outputs/`. Every claim carries a source URL with a credibility tier, a pointer to our own evidence, or the label `ASSUMPTION`. All six phases run in one LangGraph graph, each ending at its own founder gate. Discovery, research, scoring and Gate 1 run end to end; the coach and niche path remain STUBBED in the status table; the Phase 2–6 agents run in the graph but their outputs are drafts labelled STUBBED. Payments are MOCKED.
 
 ```mermaid
 flowchart TD
-  B["Founder brief"] --> P1["Phase 1: Discover<br/>intake, category check, research, skeptic, score"]
-  P1 --> G1{"Gate 1 + niche gate<br/>rules recommend, founder decides"}
-  G1 -- "stop" --> S(["STOP + reason<br/>outputs/phase1_gate_decision.md"])
+  B["Founder brief"] --> P1["Phase 1: Discover: discovery, category check, search plan, research, skeptic, score"]
+  P1 --> G1{"Gate 1 + niche gate: rules recommend, founder decides"}
+  G1 -- "stop" --> S(["STOP + reason: outputs/phase1_gate_decision.md"])
   G1 -- "repeat / pivot (max 3 rounds)" --> CO["coach: improvements + questions"] --> P1
-  G1 -- "go" --> P2["Phase 2: Validate<br/>Lean Canvas, landing copy, waitlist test"]
-  P2 --> G2{"Gate 2 (STUBBED)"}
-  G2 -- "go" --> P3["Phase 3: Build<br/>plan, then landing page, product, user docs"]
-  P3 --> G3{"Gate 3 (STUBBED)"}
-  G3 -- "go" --> P4["Phase 4: Commercial setup<br/>pricing, policy drafts, marketing plan"]
-  P4 --> G4{"Gate 4 (STUBBED)"}
-  G4 -- "go" --> P5["Phase 5: Sell/deliver/get paid<br/>launch drafts + MOCKED sale to cash"]
-  P5 --> G5{"Gate 5 (STUBBED)"}
-  G5 -- "go" --> P6["Phase 6: Operate and learn<br/>metrics vs targets, memo"]
-  P6 --> G6{"Gate 6 (STUBBED)"}
+  G1 -- "go" --> P2["Phase 2: Validate: Lean Canvas, landing copy, waitlist test"]
+  P2 --> G2{"Gate 2: waitlist target vs real count"}
+  G2 -- "go" --> P3["Phase 3: Build: plan, then landing page, product, user docs"]
+  P3 --> G3{"Gate 3: files exist, HTML parses, guardrails pass"}
+  G3 -- "go" --> P4["Phase 4: Commercial setup: pricing, policy drafts, marketing plan"]
+  P4 --> G4{"Gate 4: price basis + 3 policy drafts"}
+  G4 -- "go" --> P5["Phase 5: Sell/deliver/get paid: launch drafts + MOCKED sale to cash"]
+  P5 --> G5{"Gate 5: drafts + MOCKED payment test"}
+  G5 -- "go" --> P6["Phase 6: Operate and learn: metrics vs targets, memo"]
+  P6 --> G6{"Gate 6: metrics vs Gate 2 targets"}
   G6 -- "pivot" --> P1
   G2 & G3 & G4 & G5 & G6 -- "stop" --> S
 ```
@@ -30,20 +30,22 @@ Every phase ends at a gate (see [Gates](#gates)), and every draft is shown to th
 
 ### Phase 1: Discover
 
-**Core step: find opportunities.** A LangGraph graph ([`orchestrator.py`](orchestrator.py)). One shared state, the Briefcase ([`schemas.py`](schemas.py)), is saved by a SQLite checkpointer after every node, so a gate can pause for the founder and the run can resume. A full run is budgeted at 15,000 tokens (`TOKEN_BUDGET`).
+**Core step: find opportunities.** A LangGraph graph ([`orchestrator.py`](orchestrator.py)). One shared state, the Briefcase ([`schemas.py`](schemas.py)), is saved by a SQLite checkpointer after every node, so a gate can pause for the founder and the run can resume. The 15,000-token `TOKEN_BUDGET` is a reporting threshold: exceeding it is logged at finish, not prevented by a hard execution cap.
 
 ```mermaid
 flowchart TD
-  B["Founder brief"] --> I["intake: fixed questions for missing fields"]
-  I --> C{"category_check"}
+  B["Founder brief"] --> C{"category_check"}
   C -- "banned product" --> S(["STOP + reason"])
-  C -- "ok" --> W["weigher: areas + weights + queries"]
-  W --> R["researcher x N, in parallel"]
+  C -- "ok" --> D["discovery: here's what I understood,: 5 assumptions, questions (max 2 rounds)"]
+  D --> F{"founder confirms or corrects"}
+  F -- "correct" --> D
+  F -- "confirmed" --> W["search plan: queries per evidence type: pain, competitors, pricing, market, regulation"]
+  W --> R["researcher x evidence type, in parallel: claims C1, C2 ... with URL + tier"]
   R --> SK["skeptic: check the founder's claims"]
-  SK --> SC["scorer: rubric scores, capped by evidence"]
+  SK --> SC["scorer: rubric scores citing claim ids"]
   SC --> G{"gate_1: rules recommend, founder decides"}
   G -- "stop" --> S
-  G -- "repeat / pivot" --> CO["coach: improvements + questions"] --> W
+  G -- "repeat / pivot" --> CO["coach: questions about missing evidence"] --> W
   G -- "go" --> SD["subdomain: niche, competitors, interview kit"]
   SD --> RS["rescore"] --> G2{"gate_1_niche: founder decides"}
   G2 -- "go" --> P2["Phase 2"]
@@ -52,49 +54,37 @@ flowchart TD
 
 | Step | Agent / file | Method | Model? | Output |
 |---|---|---|---|---|
-| 1. Intake | [`agents/intake.py`](agents/intake.py) | **Fixed questions**, asked only for missing brief fields: skills, budget, time available, location, target market, team. The run pauses (`interrupt`) for the answers. The founder's answers are treated as claims to check, not facts. | No | `phase1_step1_intake.md` |
-| 2. Category check | [`guardrails.py`](guardrails.py) via `orchestrator.category_check_node` | Every brief field is checked against banned categories: physical goods; financial, investment or crypto products; health advice; legal advice. A strong keyword stops the run. An ambiguous keyword (crypto, supplements, handmade, lending …) needs the fast model to confirm, and stays blocked if the model can't be reached. A banned product means STOP before any research. | Rules + fast model | `phase1_step2_category_check.md` |
-| 3. Weigher | [`agents/weigher.py`](agents/weigher.py) | Splits the idea into 2–3 business areas with weights and one search query each. A "problem" area and a "competitors" area are always included. | Yes | `phase1_step3_areas.md` |
-| 4. Research | [`agents/researcher.py`](agents/researcher.py) | One researcher per area, run in parallel (LangGraph `Send`). It takes the top 3 search results, usually plus one forum search (people describing the problem), rates each source A–D, and turns snippets into claims. URLs and tiers are attached in Python from the source number the model gives, so the model can't invent a URL. Anything stated without a valid source becomes `ASSUMPTION`. Country facts come from the World Bank API (tier A). | Yes | `phase1_step4_research_<area>.md` |
+| 1. Category check | [`guardrails.py`](guardrails.py) via `orchestrator.category_check_node` | Every brief field is checked against banned categories: physical goods; financial, investment or crypto products; health advice; legal advice. A strong keyword stops the run. An ambiguous keyword (crypto, supplements, handmade, lending …) needs the fast model to confirm, and stays blocked if the model can't be reached. A banned product means STOP before any research. Checked again after discovery. | Rules + fast model | `phase1_step1_category_check.md` |
+| 1. Discovery | [`agents/discovery.py`](agents/discovery.py) | "Here's what I understood" plus five assumptions (customer, problem, current alternative, why now, payment), built in Python from the brief and the founder's answers, with the model's text used only when it adds something. Questions carry the assumption type they ask about; at most 2 rounds; then the founder confirms or corrects. Only a confirmed understanding goes to research. | Yes (fast) | `phase1_step1_discovery.md` |
+| 2. Search plan | [`agents/search_plan.py`](agents/search_plan.py) | Python fills query templates per evidence type from the confirmed keywords: pain (incl. Reddit and Hacker News), competitors (incl. Google Play), pricing, market (World Bank) and regulation when the activity is regulated; Arabic keywords for Egypt; at most 12 queries, each with its reason. | No | `phase1_step2_search_plan.md` |
+| 3. Research | [`agents/researcher.py`](agents/researcher.py) | One researcher per evidence type, in parallel (LangGraph `Send`). A result is kept only if a keyword-overlap score passes and the model flags it relevant; one site counts once (each forum thread once); every dropped result is logged with its reason. Each kept result becomes a claim with an id (C1 …), its type, URL and A–D tier, attached in Python so the model can't invent a URL. Country facts come from the World Bank API (tier A). | Yes (fast) | `phase1_step3_research.md` |
 | 5. Skeptic | [`agents/skeptic.py`](agents/skeptic.py) | Marks up to 3 of the founder's statements as supported, contradicted or unverified. A verdict that doesn't point at a real sourced claim is demoted to unverified in Python. | Yes | `phase1_step5_skeptic.md` |
-| 6. Score | [`agents/scorer.py`](agents/scorer.py) | The model proposes a 0–4 score per rubric criterion. Python caps each score by the evidence actually present (for example, market can't score above 1 without a tier A/B figure). | Yes + rules | `phase1_step6_scores.md` |
+| 6. Score | [`agents/scorer.py`](agents/scorer.py) | The model proposes a 0–4 score per criterion with the claim ids it rests on. Python checks them: a score above 1 on problem, competition, willingness to pay or market without a cited claim of that type is capped at 1 ("no evidence"); market can't exceed 1 without a tier A/B figure; rules and risk comes from the guardrails; a missing criterion means "scoring incomplete -> repeat", never a 0. | Yes + rules | `phase1_step6_scores.md` |
 | Gate 1 | [`gates.py`](gates.py), `orchestrator.make_gate_eval/make_gate_wait` | Recommends go / repeat / pivot / stop from the rules. Pauses for the founder's decision. | No | `phase1_gate_decision.md` |
-| 7. Coach | [`agents/coach.py`](agents/coach.py) | On repeat or pivot: proposes a revised idea, lists missing evidence and asks the founder questions, then loops back to the weigher. A pivot keeps the sourced problem evidence. The run stops after `MAX_ROUNDS = 3` rounds without a go. | Yes | `phase1_step7_coach.md` |
+| 7. Coach | [`agents/coach.py`](agents/coach.py) | On repeat or pivot: proposes a revised idea, lists missing evidence and asks the founder about the missing evidence types, then loops back to the search plan. An accepted pivot makes the next research round the evidence cutoff; earlier claims remain in the audit history. The run stops after `MAX_ROUNDS = 3` rounds without a go. | Yes | `phase1_step7_coach.md` |
 | 8. Subdomain | [`agents/subdomain.py`](agents/subdomain.py) | On go: places the idea in one precise niche (e.g. "HR tech → interview scheduling for SMEs in Egypt"), researches that niche's competitors, and re-scores. The niche gate then pauses for the founder. | Yes | `phase1_step8_niche.md`, `phase1_step8_niche_scores.md`, `phase1_gate_niche_decision.md` |
 | 9. Interview kit | `agents/_common.write_interview_kit` | 5–7 Mom Test questions about past behaviour (never "would you buy this?"), for the founder to ask real people. Written after go, repeat or pivot. | Yes, with a fixed template fallback | `phase1_step9_interview_kit.md` |
 | 10. Result | `orchestrator.finish_node` | Summary of the run, including the stop reason. | No | `phase1_step10_result.md` |
 
-**Prompts:** one file per agent in [`prompts/`](prompts/). They are skeptical by design: no praise, no income promises, no invented numbers, JSON replies only.
+**Prompts:** Phase 1 prompt files are in [`prompts/`](prompts/); Phase 2-6 prompts are currently embedded in their agent modules. They are skeptical by design: no praise, no income promises, no invented numbers, JSON replies only.
 
-**Discovery conversation** ([`agents/discovery.py`](agents/discovery.py), [`agents/questions.py`](agents/questions.py)). Before any research, the system restates the idea plainly and lists one assumption for each type: customer, problem, current alternative, why now, and payment (`discovery_summary`). It also extracts the search keywords. It then asks 3–5 questions (`discovery_questions`):
-- They target what is vague or missing, and the riskiest assumptions.
-- They follow The Mom Test: about past behaviour, never "would you use it". Hypothetical questions and questions that break a guardrail are dropped in Python.
-- Each has a reason and 2–3 answers the founder can click.
+**Discovery conversation** ([`agents/discovery.py`](agents/discovery.py)). The live path uses `prompts/discovery.md`; `agents/questions.py` is present but bypassed because `_hashish()` returns `None`. Python assembles the summary and five typed assumptions from the brief, useful model text, founder answers and corrections. Founder answers take precedence over model assumptions. Empty, unclear and copied prompt text is rejected. Questions include a reason, suggestions and an assumption type; missing fields have fixed fallback questions. There are at most two question rounds, then the founder confirms or corrects the understanding. A brief already carrying all five `confirmed_understanding` fields skips discovery.
 
-The founder confirms or corrects the understanding before research starts. If the model fails, fixed questions are used. After repeat or pivot, `coach_questions` asks about the missing evidence types for the lowest-scoring criteria. All calls are small (JSON mode, temperature 0, one example per prompt), and every text passes `guardrails.check_text`.
+After repeat or pivot, `agents/coach.py` asks about missing evidence types and sends the next round to the search plan. The separate `agents/questions.py` tests do not demonstrate its use in the live graph.
 
 **Search plan by evidence type** ([`agents/search_plan.py`](agents/search_plan.py), [`agents/researcher.py`](agents/researcher.py)). The confirmed keywords become queries for each evidence type: pain, competitors, pricing, market and regulation. One researcher runs per type. Every claim it keeps carries an id (C1, C2 …) and its type, so later steps can cite it.
 
-**Evidence-cited evaluation memo** ([`agents/evaluation_memo.py`](agents/evaluation_memo.py), called at every gate by `orchestrator.build_memo`). Python supplies the facts: the verdict and rules from `gates.py`, the scores, and the claims with ids. The model only writes the explanation. Python then validates it:
-- every claim id must exist;
-- in text without a valid id, sentences with numbers are removed and the rest is marked `ASSUMPTION`;
-- guardrail hits are removed.
+**Evidence-cited evaluation memo** (`orchestrator.build_memo`). Every gate payload contains a memo built entirely in Python from the gate recommendation and reasons. Phase 1 also includes criterion scores, score reasoning and cited claim ids already in state. The memo lists missing citations and fixed next-step text for go, repeat, pivot or stop. It makes no model call and does not independently revalidate the scorer's claims. The serialized `source` value is currently `fallback`, although this is the live implementation. `agents/evaluation_memo.py` is available separately but is not called by the live graph.
 
-The scores always come from Python. Next steps are built in Python from the verdict:
-- go: test the riskiest assumption first;
-- repeat: exactly which evidence to gather and how, with the Mom Test kit;
-- pivot: two directions backed by cited claims;
-- stop: why, and what new evidence would change it.
-
-If the model fails, a template memo is built from the gate's reasons and the cited claims. At Gate 1 it writes `phase1_step5_evaluation.md`, with citations like [C3] and a sources list.
+`orchestrator._memo_markdown` renders the memo into the gate file. The committed `phase1_step5_evaluation.md` is a historical run artifact; the current memo path does not generate that separate file. It must not be presented as a newly generated output of this implementation.
 
 ### Phase 2: Validate
 
 **Core step: design the business.** [`agents/phase2_lean_canvas.py`](agents/phase2_lean_canvas.py) drafts a Lean Canvas: problem, segments, unique value proposition, solution, channels, revenue, costs, key metrics and unfair advantage. It also drafts unit economics from the founder's own inputs, the riskiest assumption, and landing-page copy for a waitlist test.
 - **Method:** each canvas item cites a numbered Phase 1 evidence item or becomes `ASSUMPTION`. The citation is resolved in code, so the model can't attach a source. The founder's own numbers are `ASSUMPTION`s.
-- **Waitlist test:** the founder sets the target **before** the test (e.g. a number of sign-ups in 14 days) and enters the real count afterwards. The system never estimates or invents either one. The real-count step is STUBBED.
+- **Waitlist test:** the founder sets the target **before** the test (e.g. a number of sign-ups in 14 days) and enters the real count afterwards. The system never estimates or invents either one. The graph pauses for founder-entered targets and count; it does not collect or independently verify sign-ups. The landing-page form is STUBBED.
 - **Output:** `phase2_step1_lean_canvas.md`.
-- **Status:** the agent runs standalone and has tests ([`tests/test_phase_agents.py`](tests/test_phase_agents.py)). It is not yet wired into the graph, so it is STUBBED.
+- **Status:** the draft agent runs in the graph after the niche gate and has tests ([`tests/test_phase_agents.py`](tests/test_phase_agents.py), [`tests/test_orchestrator.py`](tests/test_orchestrator.py)). Its outputs remain STUBBED.
 
 ### Phase 3: Build
 
@@ -107,7 +97,7 @@ Output: `phase3_step1_build_plan.md`.
 
 **After the founder approves the build plan, a real build follows.** [`agents/phase3_build.py`](agents/phase3_build.py):
 
-1. **Product format.** One small model call picks the simplest honest digital format the idea allows:
+1. **Product format.** The graph pauses at `build_options` for the founder to choose the digital format before building:
    - a Markdown template pack, guide or checklist; or
    - a small single-file HTML tool (a calculator, converter or interactive checklist) that runs in the browser, uses no libraries or services, and sends no data.
 
@@ -122,7 +112,7 @@ Output: `phase3_step1_build_plan.md`.
    - `guardrails.check_text` passes on all visible text;
    - the landing page shows the demo-form notice.
 
-Each model call is small: temperature 0 and capped length. Every file is labelled STUBBED (a header in Markdown, a visible banner in HTML). Tests: [`tests/test_phase_agents.py`](tests/test_phase_agents.py). Status: both Phase 3 agents run standalone with tests and are not yet wired into the graph (STUBBED).
+Each model call is small: temperature 0 and capped length. Every file is labelled STUBBED (a header in Markdown, a visible banner in HTML). Tests: [`tests/test_phase_agents.py`](tests/test_phase_agents.py). Status: both Phase 3 agents run in the graph with tests, with `gate_3_plan` before the build and `gate_3` afterwards. Their outputs remain STUBBED.
 
 Not built: a full generated app (the coder and tester agents that generate a complete MVP in a separate project and run its tests) is on the roadmap and STUBBED. So are the team builder (role description, application form, blind scoring, structured interview guide) and a separate docs writer for a full app.
 
@@ -135,7 +125,7 @@ Not built: a full generated app (the coder and tester agents that generate a com
 - **Marketing plan:** up to 3 channels, taken from where Phase 1 found the target users, with sources.
 - **Questions for agencies:** email drafts with the agency's official contact, for the founder to send. STUBBED.
 
-Output: `phase4_step1_commercial.md`. Status: runs standalone with tests, not yet wired into the graph (STUBBED).
+Output: `phase4_step1_commercial.md`. Status: runs in the graph with its own founder gate and tests; outputs remain STUBBED.
 
 ### Phase 5: Sell/deliver/get paid
 
@@ -144,7 +134,7 @@ Output: `phase4_step1_commercial.md`. Status: runs standalone with tests, not ye
 - a store-page draft;
 - up to 3 launch posts.
 
-The price shown comes only from the Phase 4 draft. Nothing is posted or published. The founder posts each item under their own name. The store page can go live only through `payments.publish_listing(..., founder_approved=True)`, on the MOCKED store. Checkout, delivery, refunds and reconciliation are MOCKED; see [Sale to cash](#sale-to-cash). Output: `phase5_step1_launch.md`. Status: the launch agent runs standalone with tests and is not yet wired into the graph (STUBBED). Store hosting and posting are MOCKED.
+The price shown comes only from the Phase 4 draft. Nothing is posted or published. The founder posts each item under their own name. The store page can go live only through `payments.publish_listing(..., founder_approved=True)`, on the MOCKED store. Checkout, delivery, refunds and reconciliation are MOCKED; see [Sale to cash](#sale-to-cash). Output: `phase5_step1_launch.md`. Status: the launch agent runs in the graph before `gate_5`, with tests; its drafts remain STUBBED. Store hosting and posting are MOCKED.
 
 ### Phase 6: Operate and learn
 
@@ -158,7 +148,7 @@ The price shown comes only from the Phase 4 draft. Nothing is posted or publishe
 | Some targets missed | pivot |
 | Every target met | go (persevere) |
 
-The model writes the memo text, next experiments, and two support-reply drafts. The replies are for the founder to send; the founder decides every refund, and a reply never says money was moved. There are no real customers yet, so the data is `payments.mock_sales_data()` (MOCKED), and the output says so at the top. Output: `phase6_step1_memo.md`. Status: runs standalone with tests, not yet wired into the graph (STUBBED). Sales and usage data are MOCKED.
+The model writes the memo text, next experiments, and two support-reply drafts. The replies are for the founder to send; the founder decides every refund, and a reply never says money was moved. There are no real customers yet, so the data is `payments.mock_sales_data()` (MOCKED), and the output says so at the top. Output: `phase6_step1_memo.md`. Status: runs in the graph with its own founder gate and tests; outputs remain STUBBED. Sales and usage data are MOCKED.
 
 ## Gates
 
@@ -202,15 +192,18 @@ On a deliberately weak idea, the system recommends stop (`test_weak_idea_recomme
 - **Overrides:** a founder overriding a stop is recorded as an override in the gate file and the log.
 - **Before the founder answers:** the gate file says "Waiting for the founder" and nothing is logged as approved ([`tests/test_approval.py`](tests/test_approval.py)).
 
-**Gates 2–6** use the same four outcomes against targets set before each phase. Their gate nodes are not built yet (STUBBED). The planned targets:
+**Gates 2-6** are implemented in `gates.py` and wired by `orchestrator.add_later_phases`. Their agents still produce STUBBED drafts. Each gate pauses for the founder; stop ends the run, pivot goes to the coach, and repeat reruns the phase with the founder's note in `brief.change_request` (Gate 2 can return to target/count entry). More than two repeats at one later-phase gate ends the run.
 
-| Gate | Target set before the phase | Recommends stop when |
+| Gate | Implemented check | Recommendation |
 |---|---|---|
-| 2 Validate | The founder sets a waitlist target in advance and enters the real count | Real count far below target; no real count yet → repeat, never invented |
-| 3 Build | Smoke tests pass; user docs exist | Tests still fail after a repeat |
-| 4 Commercial | Price has a stated basis; policy drafts exist; no guardrail violations | Pricing works only with income promises or dark patterns |
-| 5 Launch | The founder approved each post and the store page; the mocked delivery test passes | Delivery or reconciliation mismatch |
-| 6 Operate | Memo backed by the logged metrics | Metrics below the Gate 2 targets (rules in Phase 6 above) |
+| 2 Validate | Founder-entered waitlist target and real count | Missing target/count: repeat; count below 25% of target: stop; below target: repeat; target met: go |
+| 3 Plan | Stack and MVP features exist; no draft guardrail hits | Missing content or violations: repeat; otherwise go to founder approval and product-format choice |
+| 3 Build | Build agent's file, HTML and guardrail checks | Failed checks or missing build: repeat; otherwise go |
+| 4 Commercial | Non-empty price, stated basis, terms, privacy and refund drafts | Missing content or violations: repeat; otherwise go; an unsourced price basis stays ASSUMPTION |
+| 5 Launch | Store title, launch-post drafts and passing MOCKED payment test | Missing drafts, failed test or violations: repeat; otherwise go; nothing is actually posted |
+| 6 Operate | Phase 6 memo's Python recommendation | MOCKED sales: repeat; for other data, targets determine go / pivot / stop / repeat as described above |
+
+**Search outages and incomplete scoring:** missing criterion scores mean repeat, not zero. If pain research received no answer from any web engine, Gate 1 turns an evidence-related stop into repeat; founder guardrail violations still stop. Search-cache fallback behavior is a known limitation pending a fix.
 
 ## Sale to cash
 
@@ -252,12 +245,12 @@ The fee is a MOCKED 3% (an `ASSUMPTION`, not any provider's pricing). The test r
 
 ```mermaid
 flowchart LR
-  BR["Founder brief + answers"] --> BC[("Briefcase<br/>LangGraph state")]
+  BR["Founder brief + answers"] --> BC[("Briefcase: LangGraph state")]
   T["tools/: search, World Bank, credibility"] --> BC
-  BC <--> CK[(".cache/checkpoints.sqlite<br/>saved after every node")]
-  BC --> G["gates.py + rubric.yaml"] --> FD["Founder decision<br/>approve / reject"] --> BC
-  BC --> O["outputs/phaseN_stepM_name.md<br/>outputs/phaseN_gate_name.md"]
-  BC --> L["decision_log.json<br/>one entry per agent action"]
+  BC <--> CK[(".cache/checkpoints.sqlite: saved after every node")]
+  BC --> G["gates.py + rubric.yaml"] --> FD["Founder decision: approve / reject"] --> BC
+  BC --> O["outputs/phaseN_stepM_name.md: outputs/phaseN_gate_name.md"]
+  BC --> L["decision_log.json: one entry per agent action"]
 ```
 
 - **The Briefcase** ([`schemas.py`](schemas.py)) carries:
@@ -286,7 +279,7 @@ flowchart LR
   - Web search ([`tools/search.py`](tools/search.py)) tries free engines in order: DuckDuckGo and its other `ddgs` backends, then the Wikipedia search API, then Hacker News Algolia. Results are cached under `.cache/search/`.
   - World Bank Open Data ([`tools/worldbank.py`](tools/worldbank.py)): population, internet users (%) and GDP per capita, cached under `.cache/worldbank/`. Each value is tier A and keeps its exact API URL.
   - IMF, OECD, UN, Eurostat and national statistics offices (e.g. CAPMAS) are STUBBED. Paid databases are not used.
-- **Models:** [`llm.py`](llm.py) and [`config.py`](config.py). With `LLM_PROVIDER=auto`, the system uses Groq's free tier (open-weight `gpt-oss-120b` and `gpt-oss-20b`) when a key is set in the local `.env`, and local Ollama (`qwen3:8b`) otherwise. No paid service is required.
+- **Models:** [`llm.py`](llm.py) and [`config.py`](config.py). With `LLM_PROVIDER=auto`, the system uses Groq's free tier (open-weight `gpt-oss-120b` and `gpt-oss-20b`) when a key is set in the local `.env`, and local Ollama (`qwen3:4b`) otherwise. No paid service is required.
 - **Guardrail eval data** ([`evals/`](evals/)):
   - trick prompts, held-out prompts and legitimate briefs;
   - the runner `run_guardrails.py`;
@@ -303,8 +296,8 @@ This table is copied from the README's "What works and what is mocked" table and
 | All | Founder approve/reject at every gate (`approval.py`, `gates.py`) | **Working** | `tests/test_record_decision.py`, `tests/test_approval.py`, `tests/test_gates.py` |
 | All | Guardrails (`guardrails.py`) | **Working** | `tests/test_guardrails.py`, `tests/test_guardrail_eval.py`; results in `evals/guardrail_results.md` |
 | All | Data tools: web search with a fallback chain of free engines, World Bank indicators, A–D source ratings (`tools/search.py`, `tools/worldbank.py`, `tools/credibility.py`) | **Working** | `tests/test_search.py`, `tests/test_worldbank.py`, `tests/test_credibility.py` |
-| Discover | Intake and follow-up questions (`agents/intake.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
-| Discover | Category check, business-area weighting, research with rated sources (`guardrails.py`, `agents/weigher.py`, `agents/researcher.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
+| Discover | Discovery conversation: summary, five assumptions, typed questions, founder confirms or corrects (`agents/discovery.py`) | **Working** | `tests/test_orchestrator.py`; live discovery uses `prompts/discovery.md`; `agents/questions.py` is bypassed; committed demo run in `outputs/` |
+| Discover | Category check, search plan by evidence type, research with rated sources and claim ids (`guardrails.py`, `agents/search_plan.py`, `agents/researcher.py`) | **Working** | `tests/test_orchestrator.py`; committed demo run in `outputs/` |
 | Discover | Claim check, rubric score, Gate 1 with STOP (`agents/skeptic.py`, `agents/scorer.py`, `gates.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
 | Discover | Coach loop, niche step and niche gate (`agents/coach.py`, `agents/subdomain.py`) | **STUBBED** | Tested offline only (`tests/test_orchestrator.py`) |
 | Validate | Lean Canvas, landing-page copy, waitlist targets set by the founder (`agents/phase2_lean_canvas.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED; the real sign-up count is entered by the founder, never estimated |
@@ -319,8 +312,8 @@ This table is copied from the README's "What works and what is mocked" table and
 
 From the plan, after the hackathon:
 
-- **Wire Phases 2–6 into the graph,** each with its own founder gate and the targets in [Gates](#gates). Then the draft agents can move from STUBBED to Working once they run end to end with tests.
-- **Gate 2 waitlist test:** the founder enters the real sign-up count, and the gate compares it with the target set in advance.
+- **Validate the connected Phase 2-6 drafts end to end:** improve generated products and their functional tests, retaining STUBBED labels until the claimed capability is demonstrated.
+- **Gate 2 evidence:** add consent-based, verifiable waitlist evidence; today the founder manually enters a count and the system does not verify it.
 - **Build agents:** coder and tester agents that generate a full MVP app in a separate project folder and run its tests (today's build produces the landing page, a Markdown or single-file HTML product, and its docs); a docs writer; and the team builder (role description, application form, blind scoring of exported responses, structured interview guide, suggested slots). People stay in charge of hiring.
 - **Commercial setup:** rules research from official (tier A) sites only, and email drafts to agencies with their official contact details, for the founder to send.
 - **More data sources:** IMF, OECD, UN, Eurostat and national statistics offices such as CAPMAS; the Wikipedia pageviews API for interest over time; a RAG store of past runs' post-mortems.

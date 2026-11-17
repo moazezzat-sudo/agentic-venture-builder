@@ -15,9 +15,9 @@ ignores an answer:
   - "Unclear: not stated yet." only when neither the brief nor any answer covers that type.
 normalize_discovery() accepts the reply shapes small local models return (seen with qwen3:4b).
 
-Uses Hashish's agents/questions.py (discovery_summary, discovery_questions) when it is on main; until
-then, one small fast-model call per round (prompts/discovery.md). Three nodes, because a node re-runs
-from the top on resume:
+The live path uses one small fast-model call per round (prompts/discovery.md).
+agents/questions.py is available separately but bypassed here: _hashish() returns None.
+Three nodes, because a node re-runs from the top on resume:
   prepare_node  -> the model call for this round (no pause)
   ask_node      -> pause (kind "questions", stage "discovery") with the summary and questions
   confirm_node  -> pause (stage "discovery_confirm") with the two choices; writes the confirmed brief

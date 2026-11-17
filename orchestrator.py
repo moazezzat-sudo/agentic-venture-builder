@@ -518,8 +518,10 @@ def build_options_node(state: Briefcase) -> dict[str, Any]:
 
 
 def build_memo(state: Briefcase, result: GateResult) -> dict[str, Any]:
-    """The evaluation memo for a gate: Hashish's agents/evaluation_memo.write_memo when it is on main,
-    otherwise a plain Python memo built from the gate's reasons and the scores' claim ids."""
+    """Build the live gate memo in Python from gate reasons and the scores' claim ids.
+
+    agents/evaluation_memo.py is not called by this path; no model call is made here.
+    """
     # The plain Python memo below is the one used in the live run: it is built only from the gate's
     # reasons and the scores' cited claim ids, so it can't drop or invent evidence on a small local model.
     scores, notes, cited = state.get("scores") or {}, state.get("score_notes") or {}, state.get("score_claims") or {}

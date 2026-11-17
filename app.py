@@ -513,7 +513,7 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
             ss.result = box.get("result")
         st.rerun()
 
-    # ---- sidebar: only what the founder needs; developer details live in "Details for reviewers"
+    # ---- sidebar: only what the founder needs; developer details live in "Run details"
     with st.sidebar:
         if ss.run_id and st.button("Start a new brief", type="primary"):
             ss.run_id, ss.result, ss.error, ss.model_error = None, None, None, False
@@ -1159,7 +1159,7 @@ def render_sale_to_cash(st) -> None:  # pragma: no cover - UI
 def render_finished(st, result: dict[str, Any], state: dict[str, Any], run_id: str) -> None:  # pragma: no cover - UI
     """A summary for the founder: where the run ended, every decision, and what to do next.
 
-    Tokens, cost, files and the log are in "Details for reviewers".
+    Tokens, cost, files and the log are in "Run details".
     """
     phase = int(result.get("current_phase") or 1)
     idea = str((state.get("brief") or {}).get("idea") or "your idea")
@@ -1199,8 +1199,8 @@ def render_finished(st, result: dict[str, Any], state: dict[str, Any], run_id: s
 
 
 def render_details(st, run_id: Optional[str], finished: bool = False) -> None:  # pragma: no cover - UI
-    """Everything a reviewer wants and a founder doesn't: run id, model, tokens, files, the log."""
-    with st.expander("Details for reviewers"):
+    """Run metadata: run id, model, tokens, files and the decision log."""
+    with st.expander("Run details"):
         st.markdown(f"**Model:** `{settings.provider}` · `{settings.model_name()}`"
                     + (f" (fast: `{settings.model_name('fast')}`)" if settings.model_name("fast") != settings.model_name() else ""))
         if not run_id:

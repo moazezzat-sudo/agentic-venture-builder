@@ -1,11 +1,11 @@
-# Docker check (18:00)
+# Fresh-clone Docker check
 
-Two checks from a fresh clone on the demo laptop (Windows, Docker Desktop, native Ollama for Windows):
+Procedure for two checks from a fresh clone on the demo laptop (Windows, Docker Desktop, native Ollama for Windows). This document is a checklist, not a completed verification record. Record the commit, time and results below after running it:
 
 - **A. Native Ollama:** Docker uses the Ollama already running on the laptop (GPU). This is how the demo runs.
 - **B. Bundled fallback:** no `.env` at all, so `docker compose up` starts its own Ollama and downloads the model. This is what someone with nothing installed gets.
 
-Files a check run writes (`decision_log.json`, `outputs/phase1_*`) are test output: delete them, never commit them. Only the final demo runs are committed.
+Use a disposable clone for these checks. Test runs may overwrite committed demo artifacts in that clone. Keep its logs for diagnosis and never commit them over the submission demo. Do not delete committed artifacts as cleanup.
 
 ## A. Native Ollama (the demo setup)
 
@@ -41,15 +41,15 @@ Files a check run writes (`decision_log.json`, `outputs/phase1_*`) are test outp
    docker compose up --build --no-deps app
    ```
 
-   Plain `docker compose up` also works, but it first downloads the bundled model (about 2.5 GB) even though the app will use your native Ollama.
+   Plain `docker compose up` also starts the bundled model download (about 2.5 GB) in the background, even though this configuration uses native Ollama. The app does not wait for that download.
 
 5. **Open** `http://localhost:8000`. The sidebar must say provider `ollama`, model `qwen3:4b`.
 
 6. **Run one brief.** Idea: `A library of printable lesson-plan templates in Arabic for private English tutors in Egypt`, location `Egypt`. Leave the rest blank.
-   - The intake questions appear: answer them, click **Send answers and start the research**.
+   - Answer the discovery questions, then confirm the summary with **Yes, that's my idea**. Correct it first if needed.
    - A progress box shows each step ("Searching the web and rating every source…") with a seconds counter.
    - The gate card appears: "Gate 1 recommends …", the reasons under it, and the evidence tabs below.
-   - Choose **Approve**, click **Record my decision**. The page shows the result.
+   - If the recommendation is STOP, approve it. Otherwise choose **Reject and choose another outcome**, select STOP, and record the decision. The page shows the stopped result; approving a go or repeat would continue the graph.
 
 7. **Check what was written** (in a second PowerShell window, in `avb-check`):
 
@@ -68,16 +68,14 @@ Files a check run writes (`decision_log.json`, `outputs/phase1_*`) are test outp
 
    All tests must pass.
 
-9. **Clean up** the check output and stop:
+9. **Stop** the disposable check environment and inspect changes:
 
    ```powershell
    docker compose down
-   Remove-Item decision_log.json
-   Remove-Item outputs\phase1_*
    git status
    ```
 
-   `git status` must show only the untracked `.env` (it is gitignored, so usually nothing at all).
+   `git status` may show modified demo logs and outputs from the check. This is expected in the disposable clone; do not commit them. `.env` must remain ignored.
 
 ## B. Bundled Ollama fallback (nothing configured)
 
@@ -108,9 +106,11 @@ Files a check run writes (`decision_log.json`, `outputs/phase1_*`) are test outp
 
 4. **Run the same brief** as in A.6. The bundled Ollama runs on the CPU (no GPU is passed to Docker), so each step is slower than in A; that is expected.
 
-5. **Check and clean up** as in A.7 and A.9 (`docker compose down` keeps the downloaded model; `docker compose down -v` deletes it).
+5. **Inspect outputs and stop** as in A.7 and A.9 (`docker compose down` keeps the downloaded model; `docker compose down -v` deletes it).
 
-## Report back
+## Verification record
+
+Commit: not recorded. Checked at: not recorded. Machine: not recorded. No successful fresh-clone run is claimed by this checklist.
 
 | Check | A (native) | B (bundled) |
 |---|---|---|

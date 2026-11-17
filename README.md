@@ -23,8 +23,8 @@ The repository is being built during the hackathon. A row says **Working** only 
 | All | Founder approve/reject at every gate (`approval.py`, `gates.py`) | **Working** | `tests/test_record_decision.py`, `tests/test_approval.py`, `tests/test_gates.py` |
 | All | Guardrails (`guardrails.py`) | **Working** | `tests/test_guardrails.py`, `tests/test_guardrail_eval.py`; results in `evals/guardrail_results.md` |
 | All | Data tools: web search with a fallback chain of free engines, World Bank indicators, A–D source ratings (`tools/search.py`, `tools/worldbank.py`, `tools/credibility.py`) | **Working** | `tests/test_search.py`, `tests/test_worldbank.py`, `tests/test_credibility.py` |
-| Discover | Intake and follow-up questions (`agents/intake.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
-| Discover | Category check, business-area weighting, research with rated sources (`guardrails.py`, `agents/weigher.py`, `agents/researcher.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
+| Discover | Discovery conversation: summary, five assumptions, typed questions, founder confirms or corrects (`agents/discovery.py`) | **Working** | `tests/test_orchestrator.py`; live discovery uses `prompts/discovery.md`; `agents/questions.py` is bypassed; committed demo run in `outputs/` |
+| Discover | Category check, search plan by evidence type, research with rated sources and claim ids (`guardrails.py`, `agents/search_plan.py`, `agents/researcher.py`) | **Working** | `tests/test_orchestrator.py`; committed demo run in `outputs/` |
 | Discover | Claim check, rubric score, Gate 1 with STOP (`agents/skeptic.py`, `agents/scorer.py`, `gates.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
 | Discover | Coach loop, niche step and niche gate (`agents/coach.py`, `agents/subdomain.py`) | **STUBBED** | Tested offline only (`tests/test_orchestrator.py`) |
 | Validate | Lean Canvas, landing-page copy, waitlist targets set by the founder (`agents/phase2_lean_canvas.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED; the real sign-up count is entered by the founder, never estimated |
@@ -44,14 +44,14 @@ The system runs six phases in order: Discover, Validate, Build, Commercial setup
 - **Default: fully local.** The open-weight `qwen3:4b` runs on your machine through [Ollama](https://ollama.com/library/qwen3); `docker compose up` downloads it, or point the app at an Ollama you already run (see Quickstart). No account, key or payment. Settings are in `.env.example`: `OLLAMA_MODEL`, an optional smaller `OLLAMA_FAST_MODEL` for light steps, an 8,192-token context, and qwen3's thinking mode turned off for speed.
 - **With no model reachable** (no Groq key and no Ollama running), briefs with an ambiguous keyword such as "crypto", "supplements", "handmade" or "lending" are blocked to be safe, because the guardrail can't ask the model whether the product is allowed; the bundled Ollama from `docker compose up` avoids this.
 - **Optional: Groq free tier.** Set `LLM_PROVIDER=groq` (or `auto` with a key) and a free `GROQ_API_KEY` from [console.groq.com/keys](https://console.groq.com/keys) to use the open-weight `openai/gpt-oss-120b` and `openai/gpt-oss-20b` served by [Groq](https://console.groq.com/docs/models). Never required; no payment details are needed for the free tier.
-- The model choice is backed by our own measurements in `evals/model_choice.md` (in progress).
+- Historical Groq measurements are in `evals/briefs/RESULTS.md`. They predate the discovery and search-plan rewrite; the full brief suite and football check still need a fresh qwen3:4b run.
 - **Free data sources, no keys:** web search tries DuckDuckGo, then other free engines through the `ddgs` package, then the Wikipedia and Hacker News search APIs, and records which engine answered (`tools/search.py`). Country statistics come from the [World Bank Open Data API](https://datahelpdesk.worldbank.org/knowledgebase/articles/889392) (`tools/worldbank.py`).
 - **Every source is rated A–D by fixed domain rules** (`tools/credibility.py`): official and international bodies A, social media, forums and review sites D, listed news outlets and research firms C, and rule: unknown -> B (a domain in no list is treated as the company's or author's own site). No model is used to rate sources.
 - **No paid services:** payments are mocked in code.
 
 ## Cost per run
 
-$0.00 per run: the model runs locally through Ollama, so there is no charge per token (`LLM_COST_PER_1K_TOKENS=0`), and every data source is free. The token count per run will be measured from the logged demo run and shown in the web app's sidebar.
+$0.00 per run: the model runs locally through Ollama, so there is no charge per token (`LLM_COST_PER_1K_TOKENS=0`), and every data source is free. Measured: the committed demo run (weak idea, through discovery to the Gate 1 STOP) used about 7,200 tokens over 11 model calls; a historical Groq pipeline test through all six phases used 20,915 tokens, with scripted founder overrides and STUBBED outputs (`evals/briefs/RESULTS.md`). This is not evidence of customer validation or a measured qwen3:4b runtime. On Groq's free tier this also costs $0.00 in API charges; local hardware, electricity and internet are not included. The web app's sidebar shows each run's tokens.
 
 ## Demo video
 
