@@ -137,14 +137,15 @@ def at(tmp_path, monkeypatch):
 def test_brief_questions_gate_and_founder_decision(at):
     at.run()
     assert not at.exception
-    assert any("STUBBED" in m.value for m in at.sidebar.markdown)  # later phases labelled
+    labels = " ".join(m.value for m in at.markdown)  # the phase strip at the top of the page
+    assert "STUBBED" in labels and "MOCKED" in labels
 
     # Brief form -> start_run
     by_label(at.text_area, "Your idea").input("Invoice app for freelance designers")
     by_label(at.text_input, "Location").input("Egypt")
     by_label(at.button, "Start Phase 1").click().run()
     assert at.calls[0][0] == "start" and at.calls[0][1] == {"idea": "Invoice app for freelance designers", "location": "Egypt"}
-    assert any("Follow-up questions" in s.value for s in at.subheader)
+    assert any("A few questions before the research" in s.value for s in at.subheader)
 
     # Questions -> resume_run with answers
     by_label(at.text_area, "What is your budget?").input("300 USD")
@@ -163,13 +164,92 @@ def test_brief_questions_gate_and_founder_decision(at):
     record.click().run()
     assert not at.exception
 
-    # The run resumed with the founder's FounderDecision (the real gate node logs it), and shows it stopped.
+    # The run resumed with the founder's decision (the real gate node logs it), and shows it stopped.
+    # It is sent as a dict so a module reload in Streamlit can't make resume_run refuse it.
     # The app itself writes no founder entry: one decision, one log entry.
     from schemas import FounderDecision
 
-    kind, decision, _ = at.calls[2]
-    assert kind == "resume" and isinstance(decision, FounderDecision)
+    kind, sent, _ = at.calls[2]
+    decision = FounderDecision(**sent)
+    assert kind == "resume" and isinstance(sent, dict) and "answers" not in sent
     assert decision.gate == "gate_1" and decision.outcome == "stop" and decision.approved is True
     entries = json.loads(at.log.read_text(encoding="utf-8"))
     assert not [e for e in entries if e.get("approved_by") == "founder"]
-    assert any("Run stopped" in e.value for e in at.error)
+    assert any("Run stopped" in e.value and "Gate 1" in e.value for e in at.error)
+
+
+# ---------------------------------------------------------------- a step fails mid-run
+
+def failing_orchestrator(calls, with_retry):
+    """start_run fails on the model after the run exists; retry_run (if present) then reaches the gate."""
+    mod = fake_orchestrator(calls)
+    interrupted = {"run_id": "r", "round": 1, "current_phase": 1, "stopped": False, "claims": [],
+                   "awaiting_founder": False, "pending": None}
+
+    def start_run(brief, run_id):
+        calls.append(("start", brief, run_id))
+        raise ConnectionError("[WinError 10061] the target machine actively refused it")
+
+    mod.start_run = start_run
+    mod.get_state = lambda run_id: dict(interrupted, run_id=run_id)
+    if with_retry:
+        def retry_run(run_id):
+            calls.append(("retry", run_id))
+            return {**GATE, "run_id": run_id, "awaiting_founder": True, "stubbed": False, "stubbed_parts": []}
+
+        mod.retry_run = retry_run
+    return mod
+
+
+@pytest.mark.parametrize("with_retry", [True, False])
+def test_model_error_shows_the_reason_and_retry_only_when_available(tmp_path, monkeypatch, with_retry):
+    from streamlit.testing.v1 import AppTest
+
+    test_settings = Settings(outputs_dir=tmp_path / "outputs", decision_log_path=tmp_path / "log.json")
+    monkeypatch.setattr(logger, "settings", test_settings)
+    monkeypatch.setattr(app, "settings", test_settings)
+    calls = []
+    monkeypatch.setitem(sys.modules, "orchestrator", failing_orchestrator(calls, with_retry))
+    at = AppTest.from_file(str(ROOT_DIR / "app.py"), default_timeout=30)
+    at.run()
+    by_label(at.text_area, "Your idea").input("Invoice app")
+    by_label(at.button, "Start Phase 1").click().run()
+    assert not at.exception
+    assert any("failed" in e.value and "not reachable" in e.value for e in at.error)
+    assert any("stopped part-way" in w.value for w in at.warning)  # no stale form, an honest state
+    retry = [b for b in at.button if b.label == "Retry the failed step"]
+    if not with_retry:
+        assert not retry
+        return
+    retry[0].click().run()
+    assert calls[-1][0] == "retry" and not at.exception
+    assert by_label(at.button, "Record my decision").disabled  # back at the gate, waiting for the founder
+
+
+# ---------------------------------------------------------------- small helpers
+
+def test_progress_label_follows_the_latest_step():
+    e = lambda agent, action: {"agent": agent, "action": action, "run_id": "r"}  # noqa: E731
+    assert "brief" in app.progress_label([e("orchestrator", "start_run")])
+    steps = [e("orchestrator", "start_run"), e("weigher", "split_areas"), e("researcher", "research_area"),
+             e("researcher", "research_area")]
+    assert "(2 done)" in app.progress_label(steps)
+    assert "rubric" in app.progress_label(steps + [e("skeptic", "check_founder_claims")])
+    assert app.progress_label([]).startswith("Starting")
+
+
+def test_run_entries_uses_run_id_on_every_entry():
+    entries = [
+        {"action": "start_run", "run_id": "a"}, {"action": "start_run", "run_id": "b"},
+        {"action": "split_areas", "run_id": "a", "tokens": 5}, {"action": "split_areas", "run_id": "b", "tokens": 7},
+    ]
+    assert [e["tokens"] for e in app.run_entries(entries, "a") if "tokens" in e] == [5]
+
+
+def test_run_interrupted_and_gate_labels():
+    assert app.run_interrupted({"awaiting_founder": False, "stopped": False, "current_phase": 1})
+    assert not app.run_interrupted({"awaiting_founder": True})
+    assert not app.run_interrupted({"stopped": True, "current_phase": 1})
+    assert not app.run_interrupted({"current_phase": 2})
+    assert app.gate_label("gate_1") == "Gate 1" and app.gate_label("gate_1_niche") == "Gate 1 (niche)"
+    assert app.friendly("Founder chose stop at gate_1_niche.") == "Founder chose stop at Gate 1 (niche)."
