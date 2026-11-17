@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any, Iterable
 
-from agents._common import ask_json, brief_for_model, claims_markdown, cut
+from agents._common import ask_json, brief_for_model, claims_markdown, cut, model_fields
 from gates import criteria_names, load_rubric
 from logger import log_action, write_output
 
@@ -108,13 +108,12 @@ def make_node(step: int, name: str):
             ],
             "skeptic_checks": state.get("claim_checks") or [],
         }
-        data, usage = ask_json("scorer", payload, role="smart", max_tokens=700)
+        data, usage = ask_json("scorer", payload, role="smart", max_tokens=700, temperature=0)
         scores, notes = clean_scores(data.get("scores"), data.get("reasons"), claims)
 
         log_action(
             agent="scorer", action=f"score_rubric_{name}", sources=sorted({c["url"] for c in claims if c.get("url")}),
-            model=usage["model"], cost=usage["cost"], tokens=usage["tokens"], round=state.get("round", 1),
-            parsed=usage["parsed"], scores=scores,
+            run_id=state.get("run_id"), round=state.get("round", 1), **model_fields(usage), scores=scores,
         )
         weights = {k: v["weight"] for k, v in load_rubric()["criteria"].items()}
         rows = "\n".join(f"| {k} | {weights[k]:.0%} | {v:g} | {notes[k]} |" for k, v in scores.items())

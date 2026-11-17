@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from agents._common import ask_json, brief_for_model, cut
+from agents._common import ask_json, brief_for_model, cut, model_fields
 from agents.scorer import current_claims
 from logger import log_action, write_output
 
@@ -60,13 +60,12 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         "brief": brief_for_model(state["brief"]),
         "claims": [{"i": i, "text": c["text"], "tier": c.get("tier"), "support": c.get("support")} for i, c in enumerate(claims)],
     }
-    data, usage = ask_json("skeptic", payload, role="smart", max_tokens=450)
+    data, usage = ask_json("skeptic", payload, role="smart", temperature=0)
     checks = clean_checks(data.get("checks"), claims, state["brief"])
 
     log_action(
         agent="skeptic", action="check_founder_claims", sources=sorted({u for c in checks for u in c["evidence"]}),
-        model=usage["model"], cost=usage["cost"], tokens=usage["tokens"], round=state.get("round", 1),
-        parsed=usage["parsed"], verdicts=[c["verdict"] for c in checks],
+        run_id=state.get("run_id"), round=state.get("round", 1), **model_fields(usage), verdicts=[c["verdict"] for c in checks],
     )
     rows = "\n".join(
         f"| {c['statement']} | {c['verdict']} | {c['why']} | {' '.join(c['evidence']) or 'none'} |" for c in checks

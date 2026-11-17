@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from agents import researcher
-from agents._common import ask_json, brief_for_model, claims_markdown, cut, write_interview_kit
+from agents._common import ask_json, brief_for_model, claims_markdown, cut, model_fields, write_interview_kit
 from agents.scorer import current_claims
 from logger import log_action, write_output
 
@@ -19,7 +19,7 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         "areas": [a["name"] for a in state.get("areas", [])],
         "claims": [{"text": c["text"], "tier": c.get("tier")} for c in strongest],
     }
-    data, usage = ask_json("subdomain", payload, role="smart", max_tokens=500)
+    data, usage = ask_json("subdomain", payload, role="smart", temperature=0)
     niche = cut(data.get("niche") or brief.get("target_market") or brief.get("idea"), 200)
     query = cut(data.get("competitor_query") or f"{niche} tools", 120)
     kit = write_interview_kit(data.get("interview_questions"), niche, "go")
@@ -30,8 +30,9 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
 
     log_action(
         agent="subdomain", action="place_niche_and_research_competitors", sources=[s["url"] for s in sources],
-        model=usage["model"], cost=usage["cost"] + r_usage["cost"], tokens=tokens, round=round_no, niche=niche,
-        stubbed_tools=stubbed,
+        run_id=state.get("run_id"), round=round_no, niche=niche, stubbed_tools=stubbed,
+        **{**model_fields(usage), "cost": usage["cost"] + r_usage["cost"], "tokens": tokens,
+           "parsed": usage["parsed"] and r_usage["parsed"] is not False},
     )
     write_output(1, 8, "niche", (
         f"# Phase 1, step 8: niche and its competitors (round {round_no})\n\n"

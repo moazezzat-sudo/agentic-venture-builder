@@ -70,6 +70,7 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
 
     log_action(
         agent="intake", action="follow_up_questions" if questions else "brief_complete", model=None,
+        run_id=state.get("run_id"),
         asked=[q["field"] for q in questions], answered=sorted(k for k, v in answers.items() if str(v).strip()),
         still_missing=missing_fields(new_brief), guardrail_violations=[v["rule"] for v in violations],
     )

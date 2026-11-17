@@ -5,6 +5,7 @@ Public interface (PLAN.md section 11, "Shared interfaces"):
     from orchestrator import start_run, resume_run
     result = start_run(brief, run_id)          # runs until the first pause
     result = resume_run(run_id, reply)         # continues after the founder answers
+    state = get_state(run_id)                  # read-only: the run's saved state, or None
 
 Both return a dict. Check result["awaiting_founder"]:
   - False: the run has ended (stopped, or Phase 1 is finished). The dict is the
@@ -101,7 +102,8 @@ def check_category(brief: dict[str, Any]) -> tuple[bool, str, str, bool]:
 
 def category_check_node(state: Briefcase) -> dict[str, Any]:
     allowed, category, reason, stubbed = check_category(state["brief"])
-    log_action(agent="guardrails", action="category_check", model=None, allowed=allowed, category=category, stubbed=stubbed)
+    log_action(agent="guardrails", action="category_check", model=None, run_id=state.get("run_id"),
+               allowed=allowed, category=category, stubbed=stubbed)
     status = "STUBBED" if stubbed else "Working"
     write_output(1, 2, "category check", (
         f"# Phase 1, step 2: category check\n\nAllowed: **{allowed}**\n\nCategory: {category}\n\nReason: {reason}\n"
@@ -113,14 +115,15 @@ def category_check_node(state: Briefcase) -> dict[str, Any]:
         target="The product is digital and not in a banned category", evidence_summary="Stopped before any research.",
     )
     write_gate(1, "decision", _gate_markdown(result, None), status=status)
-    log_action(agent="gate", action="category_check_stop", model=None, outcome="stop")
+    log_action(agent="gate", action="category_check_stop", model=None, run_id=state.get("run_id"), outcome="stop")
     return {"stopped": True, "stop_reason": reason, "gate_results": [result.model_dump()]}
 
 
 def fan_out(state: Briefcase) -> list[Send]:
     """One researcher per area, in parallel."""
     return [
-        Send("researcher", {"research_area": {**area, "index": i}, "brief": state["brief"], "round": state.get("round", 1)})
+        Send("researcher", {"research_area": {**area, "index": i}, "brief": state["brief"], "round": state.get("round", 1),
+                            "run_id": state.get("run_id")})
         for i, area in enumerate(state["areas"])
     ]
 
@@ -186,8 +189,8 @@ def make_gate_eval(gate: str):
             rewritable_violations=[describe_violation(v) for v in draft_hits],
         ).model_copy(update={"gate": gate})
         write_gate(1, _gate_file(gate), _gate_markdown(result, None))
-        log_action(agent="gate", action=gate, model=None, outcome=result.recommendation, score=result.score,
-                   round=round_no, guardrail_violations=[v["rule"] for v in founder_hits + draft_hits])
+        log_action(agent="gate", action=gate, model=None, run_id=state.get("run_id"), outcome=result.recommendation,
+                   score=result.score, round=round_no, guardrail_violations=[v["rule"] for v in founder_hits + draft_hits])
         return {"gate_results": [result.model_dump()], "text_violations": draft_hits}
 
     node.__name__ = f"{gate}_eval"
@@ -206,8 +209,11 @@ def make_gate_wait(gate: str):
         decision = decision.model_copy(update={"overrides_recommendation": decision.outcome != result.recommendation})
         write_gate(1, _gate_file(gate), _gate_markdown(result, decision))
         log_action(agent="gate", action=f"{gate}_founder_decision", model=None, approved_by="founder",
+                   run_id=state.get("run_id"), round=state.get("round", 1),
                    outcome=decision.outcome, recommendation=result.recommendation,
-                   overrides_recommendation=decision.overrides_recommendation)
+                   approved=decision.approved, note=decision.note,
+                   overrides_recommendation=decision.overrides_recommendation,
+                   overrode_stop=result.recommendation == "stop" and decision.outcome != "stop")
         update: dict[str, Any] = {"founder_decisions": [decision.model_dump()]}
         if decision.outcome == "stop":
             update.update(stopped=True, stop_reason=f"Founder chose stop at {gate}.")
@@ -239,7 +245,8 @@ def after_gate(gate: str):
 
 def round_limit_node(state: Briefcase) -> dict[str, Any]:
     reason = f"Stopped: {MAX_ROUNDS} rounds of repeat/pivot used without reaching go."
-    log_action(agent="orchestrator", action="round_limit_stop", model=None, round=state.get("round", 1))
+    log_action(agent="orchestrator", action="round_limit_stop", model=None, run_id=state.get("run_id"),
+               round=state.get("round", 1))
     return {"stopped": True, "stop_reason": reason}
 
 
@@ -266,7 +273,8 @@ def finish_node(state: Briefcase) -> dict[str, Any]:
     tokens = run_tokens(state["run_id"])
     phase = 1 if stopped else 2
     # "run_tokens", not "tokens": this entry reports the total and must not be summed again.
-    log_action(agent="orchestrator", action="phase1_finished", model=None, stopped=stopped, run_tokens=tokens,
+    log_action(agent="orchestrator", action="phase1_finished", model=None, run_id=state.get("run_id"),
+               stopped=stopped, run_tokens=tokens,
                over_token_budget=tokens > TOKEN_BUDGET)
     last = state.get("gate_results", [{}])[-1] if state.get("gate_results") else {}
     write_output(1, 10, "result", (
@@ -361,6 +369,20 @@ def _result(run_id: str) -> dict[str, Any]:
     return {**snap.values, **meta, "awaiting_founder": False}
 
 
+def get_state(run_id: str) -> Optional[dict[str, Any]]:
+    """The saved state of a run, for the app: the Briefcase fields (brief, areas, claims, scores,
+    claim_checks, gate_results, founder_decisions, round, stopped, current_phase, ...) plus
+    run_id, awaiting_founder and pending (what the run is waiting for, or None).
+
+    Returns None when there is no run with this id. Read-only: it never moves the run on.
+    """
+    snap = get_graph().get_state(_config(_check_run_id(run_id)))
+    if not snap.values:
+        return None
+    waiting = snap.interrupts[0].value if snap.interrupts else None
+    return {**snap.values, "run_id": run_id, "awaiting_founder": waiting is not None, "pending": waiting}
+
+
 def pending(run_id: str) -> Optional[dict[str, Any]]:
     """What the run is waiting for (the interrupt payload), or None if it is not paused."""
     snap = get_graph().get_state(_config(_check_run_id(run_id)))
@@ -414,4 +436,4 @@ def resume_run(run_id: str, decision: Union[FounderDecision, dict[str, Any]]) ->
     return _result(run_id)
 
 
-__all__ = ["start_run", "resume_run", "pending", "build_graph", "get_graph", "set_graph", "stubbed_parts", "check_category"]
+__all__ = ["start_run", "resume_run", "get_state", "pending", "build_graph", "get_graph", "set_graph", "stubbed_parts", "check_category"]

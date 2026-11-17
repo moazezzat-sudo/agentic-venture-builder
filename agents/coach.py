@@ -12,7 +12,7 @@ from typing import Any
 
 from langgraph.types import interrupt
 
-from agents._common import ask_json, brief_for_model, cut, text_violations, write_interview_kit
+from agents._common import ask_json, brief_for_model, cut, model_fields, text_violations, write_interview_kit
 from logger import log_action, write_output
 
 
@@ -45,8 +45,8 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         "questions": _strings(data.get("questions"), 3),
     }
 
-    log_action(agent="coach", action=f"coach_{outcome}", model=usage["model"], cost=usage["cost"],
-               tokens=usage["tokens"], round=state.get("round", 1))
+    log_action(agent="coach", action=f"coach_{outcome}", run_id=state.get("run_id"), round=state.get("round", 1),
+               **model_fields(usage))
     bullets = lambda xs: "\n".join(f"- {x}" for x in xs) or "- _none_"  # noqa: E731
     write_output(1, 7, "coach", (
         f"# Phase 1, step 7: coach after Gate 1 ({outcome}, round {state.get('round', 1)})\n\n"
@@ -79,7 +79,7 @@ def answers_node(state: dict[str, Any]) -> dict[str, Any]:
     next_round = state.get("round", 1) + 1
     violations = text_violations({f"founder answer: {k}": v for k, v in answers.items()}, False, next_round)
     log_action(
-        agent="coach", action="start_next_round", model=None,
+        agent="coach", action="start_next_round", model=None, run_id=state.get("run_id"),
         approved_by="founder" if accepted else None, accepted_revised_idea=accepted,
         answered=sorted(answers), round=next_round, guardrail_violations=[v["rule"] for v in violations],
     )
