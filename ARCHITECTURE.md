@@ -57,19 +57,19 @@ flowchart TD
 
 ### Phase 4: Commercial setup
 - **Agents:** `agents/commercial.py` (prompt: `prompts/commercial.md`)
-- **Tools:** Honest copy linter (blocks fake reviews, countdown timers, and income promises), pricing calculator, sandbox checkout configurator.
+- **Tools:** Honest copy linter (blocks fake reviews, countdown timers, and income promises), pricing calculator, mocked checkout configurator.
 - **Method:**
   - **Step 4.1 (Offer & Honest Landing Copy):** Generates product positioning, transparent pricing, refund policy, and landing page copy. Runs automated compliance checks to guarantee no fabricated testimonials, urgency timers, or income claims exist.
-  - **Step 4.2 (Sandbox Checkout Configuration):** Prepares sandbox/mock product SKU metadata and webhook endpoints awaiting founder sign-off.
+  - **Step 4.2 (Mock Checkout Configuration):** Prepares mock product SKU metadata and webhook endpoints awaiting founder sign-off.
 - **Output:** `outputs/phase4_step1_commercial_offer.md`, `outputs/phase4_gate_decision.md`.
 
 ### Phase 5: Sell/deliver/get paid
 - **Agents & Modules:** `payments.py`, `delivery.py`, `refunds.py`, `reconcile.py`
-- **Tools:** Sandbox/mocked payment processor, idempotent fulfillment store, access token manager, ledger reconciliation engine.
+- **Tools:** Mocked payment processor, idempotent fulfillment store, access token manager, ledger reconciliation engine.
 - **Method:**
-  - **Step 5.1 (Checkout & Payment Capture):** Processes sandbox/mocked checkout events (`MOCKED` / sandbox mode only; never stores raw card numbers or passwords).
+  - **Step 5.1 (Checkout & Payment Capture):** Processes mocked checkout events (`MOCKED` only; never stores raw card numbers or passwords).
   - **Step 5.2 (Idempotent Delivery):** Upon verified payment event, issues a unique download/access token tied to the `order_id` and `idempotency_key`. Duplicate webhook deliveries return the existing receipt without re-sending or double-charging.
-  - **Step 5.3 (Refund & Revocation):** On a sandbox refund event, marks the order refunded and immediately revokes the delivery token.
+  - **Step 5.3 (Refund & Revocation):** On a mocked refund event, marks the order refunded and immediately revokes the delivery token.
   - **Step 5.4 (Ledger Reconciliation):** Reconciles orders, gross payments, processor fees, refunds, and net payouts into a balanced report.
 - **Output:** `outputs/phase5_step1_reconciliation.json`, `outputs/payment_test_log.md`, `outputs/phase5_gate_decision.md`.
 
@@ -77,7 +77,7 @@ flowchart TD
 - **Agents:** `agents/operator.py` (prompt: `prompts/operator.md`)
 - **Tools:** Telemetry aggregator, refund/feedback analyzer, backlog prioritizer.
 - **Method:**
-  - **Step 6.1 (Operations & Cohort Summary):** Analyzes sandbox order conversion, delivery latency, refund reasons, and support questions.
+  - **Step 6.1 (Operations & Cohort Summary):** Analyzes mocked order conversion, delivery latency, refund reasons, and support questions.
   - **Step 6.2 (Next-Iteration Recommendation):** Synthesizes an evidence-backed recommendation on whether to ship a point update, pivot positioning, or sunset the product.
 - **Output:** `outputs/phase6_step1_operations_report.md`, `outputs/phase6_gate_decision.md`.
 
@@ -102,22 +102,22 @@ Every phase transition passes through `gates.py` and `approval.py`. A gate combi
 
 ## Sale to cash
 
-The commercial transaction lifecycle in Phase 5 ensures deterministic links between payment, fulfillment, revocation, and accounting in sandbox/mocked mode (`payments.py`, `delivery.py`, `refunds.py`, `reconcile.py`):
+The commercial transaction lifecycle in Phase 5 ensures deterministic links between payment, fulfillment, revocation, and accounting in mocked mode (`payments.py`, `delivery.py`, `refunds.py`, `reconcile.py`):
 
 ```mermaid
 flowchart LR
-    Order["1. Customer Order\n(order_id)"] --> Pay["2. Sandbox Payment Webhook\n(event_id, idempotency_key)"]
+    Order["1. Customer Order\n(order_id)"] --> Pay["2. Mock Payment Event\n(event_id, idempotency_key)"]
     Pay --> Idem{"Idempotency Check\nAlready Processed?"}
     Idem -- "Yes (Duplicate Webhook)" --> NoOp["Return Cached Receipt\n(No Double Delivery)"]
     Idem -- "No (First Time)" --> Deliver["3. Grant Digital Access\n(delivery.py issues token)"]
     Deliver --> Ledger["4. Record Ledger Entry\n(Gross, Fee, Net)"]
-    Pay -. "Refund Requested" .-> Refund["5. Process Sandbox Refund\n(refunds.py)"]
+    Pay -. "Refund Requested" .-> Refund["5. Process Mock Refund\n(refunds.py)"]
     Refund --> Revoke["6. Revoke Access Token\n(status = REVOKED)"]
     Revoke --> Ledger
     Ledger --> Reconcile["7. Reconcile Orders, Payments,\nFees, Refunds & Payouts\n(reconcile.py)"]
 ```
 
-1. **Payment triggers delivery:** A verified `payment.succeeded` sandbox event automatically invokes `delivery.py` to provision a unique digital access token for `order_id`.
+1. **Payment triggers delivery:** A verified `payment.succeeded` mock event automatically invokes `delivery.py` to provision a unique digital access token for `order_id`.
 2. **Idempotency prevents double delivery:** Every webhook event and fulfillment call is keyed by `(order_id, idempotency_key)`. Replaying the same payment event returns the original delivery record without creating duplicate tokens or duplicate ledger credits.
 3. **Refund revokes access:** Processing a refund through `refunds.py` transitions the order state to `refunded`, appends a reversing ledger entry, and immediately invalidates the customer's download/access token (`access_active = False`).
 4. **Reconciliation matches orders, payments, fees, and payouts:** `reconcile.py` cross-checks every order against captured payments, processor fees, refunded amounts, and net payout totals (`gross - fees - refunds == net_payout`), flagging any mismatch or orphaned delivery.
@@ -148,17 +148,18 @@ All state transitions are file-backed and human-readable:
 
 ## Built vs. stubbed
 
+The repository is under active construction during the hackathon. This table is kept in line with the README's "What works and what is mocked" table.
+
 | Component | File(s) | Status | Details |
 |---|---|---|---|
-| Repository conventions & docs | `README.md`, `ARCHITECTURE.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` | **Working** | Synchronized rules, architecture diagrams, and required sections |
-| Containerized setup | `docker-compose.yml`, `.env.example` | **Working** | Single-command startup (`docker compose up`) with local Ollama support |
-| Gate & approval enforcement | `gates.py`, `approval.py` (tested in `tests/test_smoke.py`) | **Working** | Enforces founder approval, prohibited category rules, and `STOP` on weak evidence |
-| Idempotent delivery & reconciliation logic | `payments.py`, `delivery.py`, `refunds.py`, `reconcile.py` | **MOCKED** / **Working** | Deterministic idempotency, access revocation on refund, and ledger matching in sandbox/mock mode |
-| Role agents (Discover, Validate, Build, Commercial, Operate) | `agents/*.py`, `prompts/*.md` | **STUBBED** | Prompt templates and agent interfaces scaffolded; live scraping/generation adapters being expanded |
+| Shared foundation: config, model client, state schemas, decision log and output writer | `config.py`, `llm.py`, `schemas.py`, `logger.py` | **Working** | Covered by `tests/test_smoke.py` |
+| Orchestration and Phase 1 agents | `orchestrator.py`, `agents/*.py`, `prompts/*.md` | **STUBBED** | Not built yet |
+| Gates and founder approval | `gates.py`, `approval.py` | **STUBBED** | Not built yet |
+| Sale-to-cash flow | `payments.py`, `delivery.py`, `refunds.py`, `reconcile.py` | **STUBBED** | Will be `MOCKED` only (no payment provider, no sandbox) |
+| Phases 2-6 agents | `agents/*.py` | **STUBBED** | Not built yet |
 
 ## Roadmap
 
 1. **Full Local Agent Pipeline Execution:** Connect `orchestrator.py` and all `agents/*.py` modules to local `qwen3:8b` via Ollama with structured JSON output validation.
 2. **Live Public Source Connectors:** Add zero-cost read-only connectors (Hacker News Algolia API, Reddit public JSON feeds, GitHub Issues search) with automatic URL verification.
 3. **Interactive Founder Gate UI:** Provide a lightweight web dashboard alongside the CLI approval prompt to inspect evidence tables, diff artifacts, and approve/reject gates.
-4. **Stripe Test Mode Adapter:** Complement the built-in mock payment processor with an optional Stripe Test Mode webhook receiver while retaining strict sandbox-only enforcement.

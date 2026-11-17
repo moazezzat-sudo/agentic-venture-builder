@@ -64,8 +64,9 @@ Use exactly these `##` headings, in this order:
 3. `## Architecture`: SHOULD. 3–6 sentences and a link to `ARCHITECTURE.md`.
 4. `## Models and free resources`: MUST. The open-weight model (e.g. `qwen3:8b` via Ollama) and how to run without paying.
 5. `## Cost per run`: MUST. A dollar figure, e.g. `About $0.00 per run (local model, ~40k tokens)`.
-6. `## What our system will NOT do`: SHOULD. Our explicit limits (see the ground rules above).
-7. `## How the project stays alive after the hackathon`: SHOULD. Maintainers, roadmap, community and funding.
+6. `## Demo video`: SHOULD. A YouTube, Vimeo, Loom or Google Drive link (3 minutes at most).
+7. `## What our system will NOT do`: SHOULD. Our explicit limits (see the ground rules above).
+8. `## How the project stays alive after the hackathon`: SHOULD. Maintainers, roadmap, community and funding.
 
 Keep the README focused and put the important facts near the top: long files may be read only in part. Move long material to `docs/`.
 
@@ -117,14 +118,14 @@ Put a few smoke tests in `tests/`, with standard names (`test_*.py`, `*.test.ts`
 
 ## Keep the repository readable
 
-- Everything that matters is text. Images, PDFs, videos and archives are not read: diagrams go in Mermaid or ASCII.
+- Everything that matters is text. Images, PDFs, videos and archives are not read: diagrams go in Mermaid or ASCII, and the demo video is a link.
 - Put the important part of every long file first.
 - Keep generated code, build output, datasets and dependencies out of git (`.gitignore`).
 
 ## Before every push
 
 - [ ] On the default branch; no secrets committed; `.env.example` has placeholders only
-- [ ] README has all seven headings; Quickstart shows `docker compose up`; Cost per run has a `$` figure
+- [ ] README has all eight headings; Quickstart shows `docker compose up`; Cost per run has a `$` figure
 - [ ] `LICENSE` (OSI-approved, full text) and `docker-compose.yml` at the root
 - [ ] `decision_log.json`: every entry has `action`, `sources`, `model`, `cost`, `approved_by`
 - [ ] `outputs/` named by phase and step, including a gate decision; claims sourced or labelled `ASSUMPTION`

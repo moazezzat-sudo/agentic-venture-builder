@@ -1,10 +1,19 @@
-"""Smoke tests for Agentic Venture Builder repository conventions, gates, and founder approval."""
+"""Smoke tests: repository conventions and the shared foundation.
 
+Gate, approval and guardrail tests are added with those modules.
+"""
+
+import json
+import sys
 from pathlib import Path
-import unittest
 
+import pytest
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
+from logger import REQUIRED_KEYS, log_action, write_gate, write_output  # noqa: E402
+from schemas import Claim  # noqa: E402
 
 REQUIRED_README_HEADINGS = [
     "## Quickstart",
@@ -12,6 +21,7 @@ REQUIRED_README_HEADINGS = [
     "## Architecture",
     "## Models and free resources",
     "## Cost per run",
+    "## Demo video",
     "## What our system will NOT do",
     "## How the project stays alive after the hackathon",
 ]
@@ -26,80 +36,76 @@ REQUIRED_ARCHITECTURE_HEADINGS = [
     "## Roadmap",
 ]
 
-PROHIBITED_CATEGORIES = {"physical_goods", "financial_investment_crypto", "health_advice", "legal_advice"}
+
+def _headings(path: Path) -> list[str]:
+    return [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.startswith("## ")]
 
 
-def evaluate_evidence_gate(sourced_claims: int, assumption_claims: int, category: str = "digital_tool") -> str:
-    """Evaluate a phase gate and recommend 'stop' on prohibited categories or weak evidence."""
-    if category in PROHIBITED_CATEGORIES:
-        return "stop"
-    total = sourced_claims + assumption_claims
-    if total == 0 or (sourced_claims / total) < 0.5:
-        return "stop"
-    return "go"
+def test_required_files_exist():
+    for rel in ["README.md", "LICENSE", "docker-compose.yml", "ARCHITECTURE.md", ".env.example", "tests", "outputs"]:
+        assert (ROOT_DIR / rel).exists(), f"missing {rel}"
 
 
-def execute_gated_action(action_name: str, founder_approved: bool) -> dict:
-    """Enforce that nothing is published, sent, spent, or signed without founder approval."""
-    if not founder_approved:
-        raise PermissionError(f"Action '{action_name}' blocked: explicit founder approval is required.")
-    return {
-        "agent": "gate",
-        "action": action_name,
-        "sources": [],
-        "model": None,
-        "cost": 0,
-        "approved_by": "founder",
-    }
+def test_readme_headings_in_order():
+    assert _headings(ROOT_DIR / "README.md") == REQUIRED_README_HEADINGS
+    text = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
+    assert "```bash\ndocker compose up\n```" in text
+    assert "$" in text.split("## Cost per run", 1)[1].split("## ", 1)[0]
 
 
-class TestRepositoryAndPipelineSmoke(unittest.TestCase):
-    def test_required_files_and_directories_exist(self) -> None:
-        for rel_path in [
-            "CLAUDE.md",
-            "AGENTS.md",
-            "GEMINI.md",
-            "README.md",
-            "ARCHITECTURE.md",
-            ".env.example",
-            "docker-compose.yml",
-            "prompts",
-            "agents",
-            "tests",
-        ]:
-            self.assertTrue((ROOT_DIR / rel_path).exists(), f"Missing required path: {rel_path}")
-
-    def test_readme_headings_in_exact_order(self) -> None:
-        content = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
-        headings = [line.strip() for line in content.splitlines() if line.startswith("## ")]
-        self.assertEqual(headings, REQUIRED_README_HEADINGS)
-        self.assertIn("docker compose up", content)
-        self.assertIn("$", content)
-
-    def test_architecture_headings_in_exact_order(self) -> None:
-        content = (ROOT_DIR / "ARCHITECTURE.md").read_text(encoding="utf-8")
-        headings = [line.strip() for line in content.splitlines() if line.startswith("## ")]
-        self.assertEqual(headings, REQUIRED_ARCHITECTURE_HEADINGS)
-        self.assertIn("```mermaid", content)
-
-    def test_gate_recommends_stop_on_weak_evidence_or_prohibited_category(self) -> None:
-        self.assertEqual(evaluate_evidence_gate(sourced_claims=0, assumption_claims=4), "stop")
-        self.assertEqual(evaluate_evidence_gate(sourced_claims=1, assumption_claims=3), "stop")
-        self.assertEqual(
-            evaluate_evidence_gate(sourced_claims=5, assumption_claims=0, category="financial_investment_crypto"),
-            "stop",
-        )
-        self.assertEqual(evaluate_evidence_gate(sourced_claims=3, assumption_claims=1), "go")
-
-    def test_nothing_goes_out_without_founder_approval(self) -> None:
-        with self.assertRaises(PermissionError):
-            execute_gated_action("publish_landing_page", founder_approved=False)
-
-        entry = execute_gated_action("publish_landing_page", founder_approved=True)
-        self.assertEqual(entry["approved_by"], "founder")
-        for key in ("action", "sources", "model", "cost", "approved_by"):
-            self.assertIn(key, entry)
+def test_architecture_headings_in_order():
+    assert _headings(ROOT_DIR / "ARCHITECTURE.md") == REQUIRED_ARCHITECTURE_HEADINGS
+    assert "```mermaid" in (ROOT_DIR / "ARCHITECTURE.md").read_text(encoding="utf-8")
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_no_payment_keys_in_env_example():
+    text = (ROOT_DIR / ".env.example").read_text(encoding="utf-8").lower()
+    assert "stripe" not in text and "sk_live" not in text and "sk_test" not in text
+
+
+def test_log_action_has_required_keys(tmp_path):
+    log = tmp_path / "decision_log.json"
+    log_action(agent="researcher", action="search", sources=["https://example.org"], model="qwen3:8b", log_path=log)
+    log_action(agent="gate", action="gate_1", approved_by="founder", log_path=log, outcome="stop")
+    entries = json.loads(log.read_text())
+    assert len(entries) == 2
+    for entry in entries:
+        for key in REQUIRED_KEYS:
+            assert key in entry
+        assert isinstance(entry["sources"], list)
+        assert isinstance(entry["cost"], (int, float))
+    assert entries[1]["approved_by"] == "founder" and entries[1]["outcome"] == "stop"
+
+
+def test_log_action_rejects_other_approvers(tmp_path):
+    with pytest.raises(ValueError):
+        log_action(agent="x", action="y", approved_by="agent", log_path=tmp_path / "log.json")
+
+
+def test_output_names_and_mock_labels(tmp_path):
+    p1 = write_output(1, 2, "Domains & weights", "body", outputs_dir=tmp_path)
+    p2 = write_gate(1, "decision", "stop", outputs_dir=tmp_path)
+    p3 = write_output(5, 1, "payment test", "body", status="MOCKED", outputs_dir=tmp_path)
+    assert p1.name == "phase1_step2_domains_weights.md"
+    assert p2.name == "phase1_gate_decision.md"
+    assert p3.read_text().startswith("> **MOCKED**")
+    with pytest.raises(ValueError):
+        write_output(1, 1, "x", "y", ext="pdf", outputs_dir=tmp_path)
+
+
+def test_claims_need_support():
+    assert Claim(text="t", support="url", url="https://data.worldbank.org", tier="A").weight == 1.0
+    assert Claim(text="t", support="ASSUMPTION", tier="A").tier == "NONE"
+    with pytest.raises(ValueError):
+        Claim(text="t", support="url")
+    with pytest.raises(ValueError):
+        Claim(text="t", support="evidence")
+
+
+def test_provider_auto_falls_back_to_local():
+    from config import Settings
+
+    assert Settings(llm_provider="auto", groq_api_key="").provider == "ollama"
+    with_key = Settings(llm_provider="auto", groq_api_key="placeholder")
+    assert with_key.provider == "groq"
+    assert with_key.model_name("fast") != "" and with_key.model_name("smart") != ""

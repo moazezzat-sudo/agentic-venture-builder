@@ -221,3 +221,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Agentic Venture Builder: local run artifacts (never commit)
+.cache/
+*.sqlite
+*.sqlite3
+checkpoints.db
+
+# Team plan kept locally for Claude Code; not part of the submission
+PLAN.md

@@ -1,6 +1,6 @@
 # Agentic Venture Builder
 
-An open-source team of AI agents that takes a founder's idea toward a validated, sellable digital product across six structured phases with explicit evidence gates and founder approval controls.
+An open-source team of AI agents that takes a founder's brief toward a sellable **digital** product. It checks the founder's claims against rated sources, scores the idea on a fixed rubric, recommends go / repeat / pivot / stop at every gate, and waits for the founder's approval before anything moves on.
 
 ## Quickstart
 
@@ -8,54 +8,59 @@ An open-source team of AI agents that takes a founder's idea toward a validated,
 docker compose up
 ```
 
-Once the containers are running, open the app in your browser at `http://localhost:8000` (or run the interactive CLI inside the `app` container). Copy `.env.example` to `.env` if you wish to customize model or sandbox settings before starting.
+Optional: copy `.env.example` to `.env` and add a free Groq key for faster runs. Without a key, the first start downloads the local open-weight model (`qwen3:8b`, several GB) into a Docker volume. Then open `http://localhost:8000`. The founder web app is under construction (see the table below); until it lands, this command runs the smoke tests and serves the repository on that port.
 
 ## What works and what is mocked
 
-| Phase | Step | Component | Status | Notes |
-|---|---|---|---|---|
-| Phase 1: Discover | 1.1 Opportunity Scan | `agents/researcher.py` | **STUBBED** | Scans public problem threads and cites source URLs or labels `ASSUMPTION` |
-| Phase 1: Discover | Gate 1: Opportunity Gate | `gates.py` / `approval.py` | **Working** | Enforces evidence threshold and explicit founder approve/reject |
-| Phase 2: Validate | 2.1 Market & Willingness-to-Pay | `agents/validator.py` | **STUBBED** | Evaluates demand signals and competitive alternatives |
-| Phase 2: Validate | Gate 2: Validation Gate | `gates.py` / `approval.py` | **Working** | Recommends `stop` on weak evidence; requires founder approval |
-| Phase 3: Build | 3.1 Digital Product Spec & Asset Build | `agents/builder.py` | **STUBBED** | Generates digital product artifacts and documentation |
-| Phase 3: Build | Gate 3: Build Quality Gate | `gates.py` / `approval.py` | **Working** | Checks product completeness and prohibited-category guardrails |
-| Phase 4: Commercial setup | 4.1 Pricing, Copy & Terms | `agents/commercial.py` | **STUBBED** | Prepares honest landing copy and sandbox checkout configuration |
-| Phase 4: Commercial setup | Gate 4: Launch Gate | `gates.py` / `approval.py` | **Working** | Blocks publishing until founder explicitly approves |
-| Phase 5: Sell/deliver/get paid | 5.1 Sandbox Checkout & Webhook | `payments.py` | **MOCKED** | Simulated / sandbox payment intent and webhook verification |
-| Phase 5: Sell/deliver/get paid | 5.2 Idempotent Digital Delivery | `delivery.py` | **Working** | Grants access once per paid order; prevents duplicate delivery |
-| Phase 5: Sell/deliver/get paid | 5.3 Refunds & Reconciliation | `refunds.py` / `reconcile.py` | **MOCKED** | Simulated refund revokes access; reconciles orders, fees, and payouts |
-| Phase 6: Operate and learn | 6.1 Telemetry & Iteration Brief | `agents/operator.py` | **STUBBED** | Summarizes conversion, refund reasons, and next backlog actions |
+The repository is being built during the hackathon. A row says **Working** only once it runs end to end and has a test.
+
+| Phase | Step | Status | Notes |
+|---|---|---|---|
+| All | Shared foundation: settings, model client, state schemas, decision log, output writer (`config.py`, `llm.py`, `schemas.py`, `logger.py`) | **Working** | `tests/test_smoke.py` |
+| All | LangGraph orchestration (`orchestrator.py`) | **STUBBED** | Not built yet |
+| All | Founder approve/reject at every gate (`approval.py`, `gates.py`) | **STUBBED** | Not built yet |
+| All | Guardrails (`guardrails.py`) | **STUBBED** | Not built yet |
+| Discover | Intake and follow-up questions | **STUBBED** | Not built yet |
+| Discover | Business-area weighting, research with rated sources | **STUBBED** | Not built yet |
+| Discover | Claim check, rubric score, Gate 1 with STOP | **STUBBED** | Not built yet |
+| Validate | Lean Canvas, landing-page copy | **STUBBED** | Not built yet |
+| Build | Product, UI/UX and MVP-plan proposals | **STUBBED** | Not built yet |
+| Commercial setup | Pricing and draft policies | **STUBBED** | Not built yet |
+| Sell/deliver/get paid | Checkout, delivery, refunds, reconciliation | **STUBBED** | Will be MOCKED only: no payment provider, no sandbox |
+| Operate and learn | Metrics and persevere-or-pivot memo | **STUBBED** | Not built yet |
 
 ## Architecture
 
-The system orchestrates specialized role-based agents across six sequential phases: **Discover**, **Validate**, **Build**, **Commercial setup**, **Sell/deliver/get paid**, and **Operate and learn**. Between every phase, deterministic evidence gates evaluate source quality and guardrail compliance, recommending **STOP** whenever market evidence is weak or unverifiable. No external publication, spend, or commercial action can occur without an explicit founder approval step enforced in code. Every agent action and gate decision is appended to an auditable `decision_log.json`, and all phase deliverables are written to `outputs/`. See [ARCHITECTURE.md](ARCHITECTURE.md) for full phase specifications and system diagrams.
+The system runs six phases in order: Discover, Validate, Build, Commercial setup, Sell/deliver/get paid, and Operate and learn. Each phase is a set of agents in a LangGraph graph that share one state object, the Briefcase. Every phase ends at a gate that recommends go, repeat, pivot or stop against a target set in advance, then pauses until the founder approves or rejects. Every agent action is appended to `decision_log.json`, and every result is written to `outputs/`. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Models and free resources
 
-- **Primary open-weight model:** `qwen3:8b` running locally via [Ollama](https://ollama.com/) (`http://localhost:11434`).
-- **How to run without paying:**
-  1. Use the bundled `ollama` service in `docker-compose.yml` or install Ollama locally and run `ollama pull qwen3:8b`.
-  2. Leave paid API keys blank in `.env`; the orchestrator defaults to local `qwen3:8b` inference and free public web sources.
-  3. All payment, fulfillment, and reconciliation flows run in local mock/sandbox mode with zero transaction costs.
+- **Default with a key: Groq free tier.** Open-weight `openai/gpt-oss-120b` for judgement-heavy steps and `openai/gpt-oss-20b` for light steps, served by [Groq](https://console.groq.com/docs/models). Create a free key at [console.groq.com/keys](https://console.groq.com/keys) and put it in a local `.env` as `GROQ_API_KEY` (see `.env.example`). No payment details are needed for the free tier.
+- **Default without a key: fully local.** With no `GROQ_API_KEY`, the system uses `qwen3:8b` through [Ollama](https://ollama.com/library/qwen3), which `docker compose up` downloads. No account, key or payment.
+- The model choice is backed by our own measurements in `evals/model_choice.md` (in progress).
+- **No paid services:** web search uses free public search; payments are mocked in code.
 
 ## Cost per run
 
-About $0.00 per run (local model `qwen3:8b` via Ollama, ~40k tokens).
+About $0.00 per run: the Groq free tier and the local Ollama model charge nothing per token (`LLM_COST_PER_1K_TOKENS=0`). The token count per run will be measured from the logged demo run.
+
+## Demo video
+
+Not recorded yet.
 
 ## What our system will NOT do
 
-- **Never promise income or success:** We do not make revenue guarantees or financial projections presented as certainty.
-- **Never fabricate social proof or urgency:** We never create fake reviews, testimonials, sign-ups, or countdown timers.
-- **Never impersonate:** The system never poses as the founder, a customer, or another brand.
-- **Never autonomously touch real money or credentials:** The system never holds, moves, or refunds real money by itself, never creates external accounts autonomously, and never stores passwords or payment card numbers.
-- **Never build prohibited products:** The guardrail engine blocks physical goods, financial/investment/crypto products, and health or legal advice products.
-- **Never bypass founder approval or hide core features behind a paywall:** Nothing is published, sent, spent, or signed without an explicit founder approve/reject step enforced in code, and 100% of core features remain open-source.
+- Promise income or success.
+- Create fake reviews, testimonials, sign-ups, urgency or countdown timers.
+- Pose as the founder, a customer or another brand.
+- Hold, move or refund money by itself, create accounts, or store passwords or card numbers.
+- Publish, send, spend or sign anything without the founder's explicit approval.
+- Work on physical goods; financial, investment or crypto products; or health or legal advice products.
+- Hide core features behind a paywall.
 
 ## How the project stays alive after the hackathon
 
-- **Maintainers & Governance:** Maintained by the founding hackathon team under the MIT License with open pull requests, issue templates, and release tags on the `main` branch.
-- **Roadmap:**
-  - *Short-term (Month 1):* Replace remaining stubbed research/build adapters with live local tool-calling connectors and Stripe Test Mode webhooks.
-  - *Medium-term (Months 2–3):* Add pluggable digital delivery adapters (GitHub release tokens, static bundle hosting, license key servers) and an evaluation benchmark suite under `evals/`.
-- **Community & Funding:** Community contributions are welcomed via GitHub Discussions and Issues. The core project remains free and open-source with zero required paid services, sustained through maintainer sponsorship and optional community grants.
+- **Maintainers:** the founding team, under the MIT License.
+- **Roadmap:** finish all six phases; add more free official data sources (IMF, OECD, national statistics offices); add an evaluation benchmark under `evals/`.
+- **Community:** issues and pull requests on GitHub.
+- **Funding:** none required. The project runs on free, open-weight models and has no paid dependencies.
