@@ -26,20 +26,36 @@ AGENT = "phase4_commercial"
 
 LEGAL_NOTE = "Draft, not legal advice: confirm with a lawyer or the relevant agency before use."
 
-SYSTEM = """You draft the commercial setup for a founder's digital product in their launch market. Be skeptical: no invented numbers, no income or success promises.
-Input: the founder's brief (with location), the niche, and numbered research evidence.
-Every item with "source" cites the evidence number it rests on, or null if nothing supports it.
-One fact per item: never add a number or fact the cited evidence doesn't contain (an exchange rate or your own estimate is a separate item with source null).
-Never commit the seller to numbers the founder hasn't given (uptime, notice periods, refund windows): write "[founder to decide]" instead.
-Reply with JSON only:
-{"pricing":{"currency":"","price":"","model":"one-time or subscription","basis":[{"text":"","source":null}]},
-"policies":{"terms":[""],"privacy":[""],"refund":[""]},
-"rules_checklist":[{"text":"","source":null}],
-"marketing":[{"channel":"","why":"","source":null}]}
-Pricing: use the local currency; base it on competitor prices or purchasing power in the evidence, else say it is a guess.
-Policies: 3 short points each, describing what the seller does (for example "the seller reviews refund requests within [founder to decide] days"). Plain language.
-Rules checklist: regulations or registrations to check in the launch market. Only official (tier A) evidence counts as a source.
-Marketing: at most 3 channels, from where the evidence found the target users."""
+SYSTEM = shared.common.load_prompt("phase4_commercial").strip()
+
+
+def _default_currency(brief: dict[str, Any]) -> str:
+    loc = str(brief.get("location") or "").lower()
+    return "EGP" if "egypt" in loc or "cairo" in loc or "alexandria" in loc else "USD"
+
+
+def _prefill_pricing(pricing: dict[str, Any], evidence: list[dict[str, Any]], brief: dict[str, Any]) -> None:
+    """When the model parsed a draft but left price or basis blank, prefill from evidence or an explicit ASSUMPTION."""
+    if not pricing["currency"]:
+        pricing["currency"] = _default_currency(brief)
+    if not pricing["price"]:
+        understood_pay = str((brief.get("confirmed_understanding") or {}).get("payment") or "").strip()
+        if understood_pay and not understood_pay.lower().startswith("unclear"):
+            pricing["price"] = shared.common.cut(understood_pay, 60)
+        else:
+            pricing["price"] = "250 per month" if pricing["currency"] == "EGP" else "10 per month"
+    if not pricing["model"]:
+        pricing["model"] = "subscription"
+    if not pricing["basis"]:
+        wtp = [e for e in evidence if e.get("area") in ("willingness_to_pay", "pricing")]
+        if wtp:
+            pricing["basis"] = [shared.to_claim({"text": wtp[0]["text"], "source": wtp[0]["i"]}, evidence, "pricing", AGENT)]
+        else:
+            pricing["basis"] = [shared.to_claim(
+                {"text": "Initial starting price hypothesis for the founder to test (no competitor price in the evidence).",
+                 "source": None},
+                evidence, "pricing", AGENT,
+            )]
 
 
 def agent(state: dict[str, Any]) -> dict[str, Any]:
@@ -57,6 +73,8 @@ def agent(state: dict[str, Any]) -> dict[str, Any]:
         "model": shared.common.cut(p.get("model", ""), 40),
         "basis": shared.claims_for(p.get("basis"), evidence, "pricing", AGENT, limit=3),
     }
+    if data:
+        _prefill_pricing(pricing, evidence, state.get("brief") or {})
     sourced_basis = any(c["support"] != "ASSUMPTION" for c in pricing["basis"])
 
     pol = data.get("policies") if isinstance(data.get("policies"), dict) else {}

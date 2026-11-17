@@ -132,3 +132,18 @@ def test_unknown_ddgs_backend_raises_instead_of_falling_back_to_auto():
 def test_rejects_bad_arguments(tmp_path, query, max_results):
     with pytest.raises(ValueError):
         search(query, max_results=max_results, cache_dir=tmp_path)
+
+
+def test_fallback_engines_are_not_cached_and_stale_fallback_cache_is_ignored(tmp_path, monkeypatch):
+    e = use_engines(
+        monkeypatch,
+        **{"ddgs:duckduckgo": FakeEngine([], RAW[:1]),
+           "wikipedia": FakeEngine(RAW[:1])},
+    )
+    first = search("q", cache_dir=tmp_path)
+    assert first[0]["engine"] == "wikipedia"
+    assert not list(tmp_path.glob("*.json"))  # fallback result is not cached
+    second = search("q", cache_dir=tmp_path)
+    assert second[0]["engine"] == "ddgs:duckduckgo" and e["ddgs:duckduckgo"].calls == 2
+    assert len(list(tmp_path.glob("*.json"))) == 1
+

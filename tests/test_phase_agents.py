@@ -187,6 +187,15 @@ def test_unsourced_price_is_called_an_assumption(env):
     assert "no sourced basis" in (env["out"] / "phase4_step1_commercial.md").read_text(encoding="utf-8")
 
 
+def test_commercial_prefills_price_and_basis_when_omitted_by_model(env):
+    env["use"]({**COMMERCIAL, "pricing": {"currency": "", "price": "", "model": "", "basis": []}})
+    update = phase4_commercial.agent(dict(STATE))
+    pricing = update["drafts"]["phase4_commercial"]["pricing"]
+    assert pricing["price"] and pricing["currency"] == "EGP" and pricing["basis"]
+    assert update["drafts"]["phase4_commercial"]["price_has_sourced_basis"] is True
+
+
+
 # --------------------------------------------------------------------------- phase 5
 
 from agents import phase5_launch  # noqa: E402

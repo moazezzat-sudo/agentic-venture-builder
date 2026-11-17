@@ -130,6 +130,9 @@ ENGINES: list[tuple[str, Engine]] = [
     ("wikipedia", _wikipedia),
     ("hackernews", _hacker_news),
 ]
+# Fallback engines are not general web search: never cache them on disk, so the next run
+# tries the web search backends again instead of serving a fallback answer from cache.
+FALLBACK_ENGINES = ("wikipedia", "hackernews")
 
 
 # ---------------------------------------------------------------- search
@@ -184,8 +187,11 @@ def search(
     if use_cache and path.exists():
         try:
             cached = json.loads(path.read_text(encoding="utf-8"))
-            log.info("search %r: served from cache (engine %s)", query, cached.get("engine"))
-            return cached["results"]
+            if cached.get("engine") in FALLBACK_ENGINES:
+                log.info("search %r: ignoring cached fallback engine %s", query, cached.get("engine"))
+            else:
+                log.info("search %r: served from cache (engine %s)", query, cached.get("engine"))
+                return cached["results"]
         except (OSError, ValueError, KeyError):
             log.warning("search: ignoring unreadable cache file %s", path)
 
@@ -204,7 +210,7 @@ def search(
             log.warning("search %r: answered by %s after %s", query, name, "; ".join(failures))
         else:
             log.info("search %r: answered by %s", query, name)
-        if use_cache:
+        if use_cache and name not in FALLBACK_ENGINES:
             folder.mkdir(parents=True, exist_ok=True)
             payload = {"query": query, "engine": name, "fetched_at": utc_now(), "results": results}
             tmp = path.with_suffix(".tmp")

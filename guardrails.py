@@ -415,8 +415,10 @@ TEXT_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "income_promise": (
         r"\bguarantee(d|s)?\b.{0,30}\b(income|profits?|returns?|results|success|sales|revenue|customers|earnings|money)\b",
+        r"\bpromis(e|es|ed|ing)\b.{0,30}\b(income|profits?|returns?|results|success|sales|revenue|earnings|money|a living|six[- ]figures?)\b",
         r"\b(you|you'll|you will|founders?|buyers?|customers?|they) (will|can|could)?\s*(make|earn|generate)\b.{0,20}\$\s?\d",
         r"\b(make|earn)\s+\$\s?\d[\d,.]*\s*[km]?\s*(per|a|an|/|every)\s*(day|week|month|year|hour)\b",
+        r"\b(make|earn|generate|bring in)\b.{0,20}\b\d[\d,.]*\s*[km]?\s*(usd|egp|eur|gbp|dollars?|pounds?)\b.{0,20}\b(per|a|an|/|every|in|within)\s*(day|week|month|year|hour|\d+\s*(days?|weeks?|months?))\b",
         r"\bpassive income\b",
         r"\bget rich\b",
         r"\b(risk[- ]free|sure[- ]fire|surefire) (income|profits?|returns?|money|business|success)\b",
@@ -424,6 +426,9 @@ TEXT_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(financial freedom|replace your (salary|income)|quit your (day )?job)\b",
         r"\bwill (generate|earn|make|bring in|reach)\b.{0,30}(\$\s?\d|\d[\d,.]*\s*(k|m)?\s*(in )?(revenue|mrr|arr|profit))",
         r"\b(guaranteed|certain|assured) to (succeed|work|sell|make money)\b",
+        r"\b(guaranteed|assured|certain)\b.{0,20}\b(roi|return on investment|payback|cash[- ]?flow|six[- ]figure)\b",
+        r"\b(double|triple|10x)\s+(your|their)\s+(income|revenue|profits?|sales|money|salary)\b",
+        r"\b(six|6|seven|7)[- ]figure\s+(income|business|earner|revenue|profits?)\b",
         # French
         r"\b(revenus?|gains?|profits?|b[ée]n[ée]fices?)\s+(garantis?|assur[ée]s?|s[ûu]rs?)\b",
         r"\bgaranti(e|es|s|t|ssons)?\b.{0,30}\b(revenus?|gains?|succ[èe]s|ventes|profits?|b[ée]n[ée]fices?)\b",
