@@ -40,10 +40,20 @@ def get_llm(cfg: Settings | None = None, role: str = "smart", **overrides: Any):
     if provider == "ollama":
         from langchain_ollama import ChatOllama
 
+        # Defaults for local runs; every one can be overridden per call, and any other
+        # ChatOllama option (for example format="json") is passed straight through.
         return ChatOllama(
-            model=overrides.pop("model", cfg.ollama_model),
-            base_url=cfg.ollama_base_url,
+            model=overrides.pop("model", cfg.model_name(role)),
+            base_url=overrides.pop("base_url", cfg.ollama_base_url),
             temperature=overrides.pop("temperature", cfg.llm_temperature),
+            # Ollama's default context is small and silently cuts long prompts.
+            num_ctx=overrides.pop("num_ctx", cfg.ollama_num_ctx),
+            # Max tokens to generate (Ollama's name for max_tokens).
+            num_predict=overrides.pop("num_predict", overrides.pop("max_tokens", cfg.ollama_num_predict)),
+            # False turns off qwen3's thinking block, which makes runs slow.
+            reasoning=overrides.pop("reasoning", False),
+            # Keep the model loaded between calls so each step doesn't reload it.
+            keep_alive=overrides.pop("keep_alive", cfg.ollama_keep_alive),
             **overrides,
         )
     if provider == "openai_compatible":

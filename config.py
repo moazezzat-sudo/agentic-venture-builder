@@ -38,6 +38,11 @@ class Settings:
     llm_max_retries: int = int(_env("LLM_MAX_RETRIES", "6"))
     ollama_base_url: str = _env("OLLAMA_BASE_URL", "http://localhost:11434")
     ollama_model: str = _env("OLLAMA_MODEL", "qwen3:8b")
+    # Model for role="fast" with Ollama; empty means OLLAMA_MODEL (one model to pull).
+    ollama_fast_model: str = _env("OLLAMA_FAST_MODEL", "")
+    ollama_num_ctx: int = int(_env("OLLAMA_NUM_CTX", "8192"))
+    ollama_num_predict: int = int(_env("OLLAMA_NUM_PREDICT", "800"))
+    ollama_keep_alive: str = _env("OLLAMA_KEEP_ALIVE", "30m")
     llm_temperature: float = float(_env("LLM_TEMPERATURE", "0.2"))
     # Optional free-tier endpoint. Never required; the key lives only in the local .env.
     openai_compat_base_url: str = _env("OPENAI_COMPAT_BASE_URL", "")
@@ -68,6 +73,8 @@ class Settings:
             return self.groq_fast_model if role == "fast" else self.groq_model
         if self.provider == "openai_compatible":
             return self.openai_compat_model
+        if role == "fast" and self.ollama_fast_model:
+            return self.ollama_fast_model
         return self.ollama_model
 
 
