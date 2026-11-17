@@ -66,7 +66,7 @@ flowchart TD
 | 9. Interview kit | `agents/_common.write_interview_kit` | 5–7 Mom Test questions about past behaviour (never "would you buy this?"), for the founder to ask real people. Written after go, repeat or pivot. | Yes, with a fixed template fallback | `phase1_step9_interview_kit.md` |
 | 10. Result | `orchestrator.finish_node` | Summary of the run, including the stop reason. | No | `phase1_step10_result.md` |
 
-**Prompts:** Phase 1 prompt files are in [`prompts/`](prompts/); Phase 2-6 prompts are currently embedded in their agent modules. They are skeptical by design: no praise, no income promises, no invented numbers, JSON replies only.
+**Prompts.** [`prompts/`](prompts/) contains the Phase 1 prompts and the prompts for the Phase 2–6 draft agents.
 
 **Discovery conversation** ([`agents/discovery.py`](agents/discovery.py)). The live path uses `prompts/discovery.md`; `agents/questions.py` is present but bypassed because `_hashish()` returns `None`. Python assembles the summary and five typed assumptions from the brief, useful model text, founder answers and corrections. Founder answers take precedence over model assumptions. Empty, unclear and copied prompt text is rejected. Questions include a reason, suggestions and an assumption type; missing fields have fixed fallback questions. There are at most two question rounds, then the founder confirms or corrects the understanding. A brief already carrying all five `confirmed_understanding` fields skips discovery.
 
@@ -203,7 +203,7 @@ On a deliberately weak idea, the system recommends stop (`test_weak_idea_recomme
 | 5 Launch | Store title, launch-post drafts and passing MOCKED payment test | Missing drafts, failed test or violations: repeat; otherwise go; nothing is actually posted |
 | 6 Operate | Phase 6 memo's Python recommendation | MOCKED sales: repeat; for other data, targets determine go / pivot / stop / repeat as described above |
 
-**Search outages and incomplete scoring:** missing criterion scores mean repeat, not zero. If pain research received no answer from any web engine, Gate 1 turns an evidence-related stop into repeat; founder guardrail violations still stop. Search-cache fallback behavior is a known limitation pending a fix.
+**Search outages and incomplete scoring.** Missing criterion scores lead to a repeat recommendation. If pain research receives no answer from any web engine, Gate 1 turns an evidence-related stop into repeat. Founder guardrail violations still stop the run. Wikipedia and Hacker News fallback results are excluded from the cache, so the next run retries general search.
 
 ## Sale to cash
 

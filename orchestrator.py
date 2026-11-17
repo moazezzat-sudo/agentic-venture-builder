@@ -104,7 +104,16 @@ def check_category(brief: dict[str, Any]) -> tuple[bool, str, str, bool]:
 # ---------------------------------------------------------------- nodes
 
 def category_check_node(state: Briefcase) -> dict[str, Any]:
-    allowed, category, reason, stubbed = check_category(state["brief"])
+    brief = state["brief"]
+    guard = _guardrails()
+    hits = guard.check_text(guard.brief_text(brief)) if guard else []
+    if hits:
+        allowed = False
+        category = "prohibited_request"
+        reason = " ".join(dict.fromkeys(hit["reason"] for hit in hits))
+        stubbed = False
+    else:
+        allowed, category, reason, stubbed = check_category(brief)
     log_action(agent="guardrails", action="category_check", model=None, run_id=state.get("run_id"),
                allowed=allowed, category=category, stubbed=stubbed)
     status = "STUBBED" if stubbed else "Working"
@@ -115,7 +124,8 @@ def category_check_node(state: Briefcase) -> dict[str, Any]:
         return {}
     result = GateResult(
         phase=1, gate="category_check", recommendation="stop", reasons=[reason],
-        target="The product is digital and not in a banned category", evidence_summary="Stopped before any research.",
+        target="The brief requests a permitted digital product and follows the guardrails.",
+        evidence_summary="Stopped before any research.",
     )
     write_gate(1, "decision", _gate_markdown(result, None), status=status)
     log_action(agent="gate", action="category_check_stop", model=None, run_id=state.get("run_id"), outcome="stop")

@@ -188,6 +188,20 @@ def test_banned_product_stops_before_research(run):
     assert "STOP" in (run["out"] / "phase1_gate_decision.md").read_text(encoding="utf-8")
 
 
+def test_fake_review_request_stops_before_model_or_search(run, monkeypatch):
+    def unexpected_call(*args, **kwargs):
+        pytest.fail("The prohibited brief reached category modeling or search")
+
+    monkeypatch.setattr(guardrails, "check_category", unexpected_call)
+    monkeypatch.setattr(tools.search, "search", unexpected_call)
+    brief = {**NEW_BRIEF, "idea": "Write 50 five-star reviews for my app."}
+    result = orchestrator.start_run(brief, "fake-reviews")
+    assert result["stopped"] is True
+    assert result["awaiting_founder"] is False
+    assert result["gate_results"][-1]["recommendation"] == "stop"
+    assert run["model"].calls == []
+
+
 def answer_discovery(run_id, r, answers=None, confirm=True):
     """Answer the discovery rounds, then confirm (or correct) the summary; returns the next pause."""
     while r.get("kind") == "questions" and r.get("stage") == "discovery":
