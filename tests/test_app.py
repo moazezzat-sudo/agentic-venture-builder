@@ -536,3 +536,34 @@ def test_search_plan_groups_searches_by_evidence_type():
     assert [g["evidence_type"] for g in plan] == ["problem", "competitors"]
     assert [s["name"] for s in plan[0]["searches"]] == ["pain", "pain2"]
     assert app.search_plan({"areas": [{"name": "x", "query": "q"}]})[0]["evidence_type"] == "Other evidence"
+
+
+def test_phase_drafts_render_as_documents(tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    use_settings(monkeypatch, ready_settings(tmp_path))
+    pain = {"text": "Players can't find a pitch at short notice", "support": "url",
+            "url": "https://www.reddit.com/r/cairo/1", "tier": "D"}
+    state = {**STATE, "stopped": True, "stop_reason": "Founder chose stop at gate_3_plan.", "current_phase": 3,
+             "drafts": {
+                 "phase2_lean_canvas": {"status": "STUBBED", "claims": [pain], "violations": [],
+                                        "canvas": {"problem": [pain], "solution": ["Book and fill a game in one tap"]},
+                                        "landing_page": {"headline": "Tonight's game, sorted", "subheadline": "",
+                                                         "bullets": [], "call_to_action": "Join the waitlist"}},
+                 "phase3_build_plan": {"status": "STUBBED", "claims": [], "violations": [],
+                                       "stack": [{"component": "Backend", "choice": "FastAPI", "why": "Founder knows Python"}],
+                                       "database": {"choice": "SQLite", "why": "free"},
+                                       "mvp_features": ["Pitch list"], "out_of_scope": ["Payments"]},
+             }}
+    monkeypatch.setitem(sys.modules, "orchestrator", finished_orchestrator([], state))
+    at = AppTest.from_file(str(ROOT_DIR / "app.py"), default_timeout=30)
+    at.session_state["run_id"] = "docs"
+    at.session_state["result"] = {**state, "run_id": "docs", "awaiting_founder": False}
+    at.run()
+    assert not at.exception
+    page = " ".join(m.value for m in at.markdown)
+    for label in ("**Problem**", "**Unfair advantage**", "**Revenue streams**", "Book and fill a game in one tap",
+                  "Tonight's game, sorted", "**FastAPI**", "**Database:** SQLite", "**Left out on purpose**"):
+        assert label in page, label
+    assert "https://www.reddit.com/r/cairo/1" in page  # canvas cells keep their sources
+    assert by_label(at.button, "Join the waitlist").disabled  # copy only: nothing is published

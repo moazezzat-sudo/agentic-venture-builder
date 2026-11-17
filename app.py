@@ -1007,20 +1007,112 @@ def render_phases(st, state: dict[str, Any], focus: Optional[int] = None) -> Non
             if not drafts:
                 st.caption("Not reached in this run." if state.get("drafts") else note)
             for agent, draft in drafts:
-                st.markdown(f"**{agent.split('_', 1)[1].replace('_', ' ').capitalize()}** {status_badge(draft.get('status'))}")
+                title = agent.split('_', 1)[1].replace('_', ' ').capitalize()
+                status = str(draft.get("status") or "STUBBED")
+                head = st.container(horizontal=True)
+                head.markdown(f"**{title}**")
+                head.badge(status, color=STATUS_COLORS.get(status, "gray"), help=STATUS_HELP.get(status, ""))
                 violations = draft.get("violations") or []
                 if violations:
                     rules = ", ".join(sorted({str(v.get("rule", v)) if isinstance(v, dict) else str(v) for v in violations}))
                     st.warning(f"The guardrails flagged this draft ({rules}); the gate recommends repeat.")
-                claims = [c for c in draft.get("claims") or [] if isinstance(c, dict)]
-                if claims:
-                    st.markdown("\n".join(f"- {claim_line(c)}" for c in claims[:12]))
+                if not render_document(st, agent, draft):
+                    claims = [c for c in draft.get("claims") or [] if isinstance(c, dict)]
+                    if claims:
+                        st.markdown("\n".join(f"- {claim_line(c)}" for c in claims[:12]))
                 files = [p for p in output_files() if p.name.startswith(f"phase{number}_step")]
                 for path in files:
                     with st.expander(f"Draft file: {path.name}"):
                         show_file(st, path, f"phase{number}")
             if number == 5:
                 render_sale_to_cash(st)
+
+
+STATUS_HELP = {
+    "STUBBED": "A draft for you to read and edit. It is not running as a real feature yet.",
+    "MOCKED": "Runs on fake data only: no payment provider, no real money, nothing sent.",
+    "Working": "Runs for real and has a test.",
+}
+
+
+def _bullets(items: Any) -> str:
+    """Claims or strings as markdown bullets; a claim shows its tier or 'No source found'."""
+    out = []
+    for item in items or []:
+        if isinstance(item, dict) and "text" in item:
+            out.append(f"- {claim_line(item)}")
+        elif isinstance(item, dict):
+            out.append("- " + " · ".join(str(v) for v in item.values() if v))
+        elif str(item).strip():
+            out.append(f"- {item}")
+    return "\n".join(out) or "_Nothing yet._"
+
+
+def render_document(st, agent: str, draft: dict[str, Any]) -> bool:  # pragma: no cover - UI
+    """Phase drafts as readable documents. Returns False when there is no special view for this agent."""
+    if agent == "phase2_lean_canvas" and isinstance(draft.get("canvas"), dict):
+        canvas = draft["canvas"]
+        cells = [("problem", "Problem"), ("solution", "Solution"), ("unique_value_proposition", "Unique value proposition"),
+                 ("unfair_advantage", "Unfair advantage"), ("customer_segments", "Customer segments"),
+                 ("key_metrics", "Key metrics"), ("channels", "Channels"), ("cost_structure", "Cost structure"),
+                 ("revenue_streams", "Revenue streams")]
+        for row in range(3):
+            cols = st.columns(3)
+            for col, (key, label) in zip(cols, cells[row * 3:row * 3 + 3]):
+                with col.container(border=True):
+                    st.markdown(f"**{label}**")
+                    st.markdown(_bullets(canvas.get(key)))
+        lp = draft.get("landing_page") or {}
+        if any(lp.values()):
+            with st.container(border=True):
+                st.caption("Waitlist page copy (a draft: nothing is published)")
+                st.markdown(f"### {lp.get('headline', '')}\n{lp.get('subheadline', '')}\n\n{_bullets(lp.get('bullets'))}")
+                if lp.get("call_to_action"):
+                    st.button(lp["call_to_action"], disabled=True, key=f"cta_{agent}")
+        return True
+    if agent == "phase3_build_plan" and (draft.get("stack") or draft.get("mvp_features")):
+        stack = [s for s in draft.get("stack") or [] if isinstance(s, dict)]
+        if stack:
+            cols = st.columns(min(len(stack), 3))
+            for i, item in enumerate(stack):
+                with cols[i % len(cols)].container(border=True):
+                    st.caption(str(item.get("component", "")))
+                    st.markdown(f"**{item.get('choice', '')}**")
+                    if item.get("why"):
+                        st.markdown(str(item["why"]))
+        db = draft.get("database") or {}
+        if db.get("choice"):
+            st.markdown(f"**Database:** {db['choice']}" + (f" — {db['why']}" if db.get("why") else ""))
+        left, right = st.columns(2)
+        left.markdown("**First version (MVP)**\n" + _bullets(draft.get("mvp_features")))
+        right.markdown("**Left out on purpose**\n" + _bullets(draft.get("out_of_scope")))
+        if draft.get("riskiest_assumption"):
+            st.caption(f"Riskiest assumption: {draft['riskiest_assumption']}")
+        return True
+    if agent == "phase3_build" and isinstance(draft.get("files"), dict):
+        if draft.get("what"):
+            st.markdown(str(draft["what"]))
+        for kind, raw in draft["files"].items():
+            path = Path(raw)
+            if not path.exists():
+                continue
+            label = {"landing": "Landing page", "product": "Product", "user_docs": "User docs"}.get(kind, kind)
+            with st.expander(f"{label}: {path.name}"):
+                text = path.read_text(encoding="utf-8", errors="replace")
+                if path.suffix == ".html":
+                    import streamlit.components.v1 as components
+
+                    components.html(text, height=420, scrolling=True)
+                    st.caption("Download it and open the file in your browser to see it full size.")
+                elif path.suffix == ".md":
+                    st.markdown(text)
+                else:
+                    st.code(text)
+                st.download_button(f"Download {path.name}", text, file_name=path.name, key=f"doc_{kind}_{path.name}")
+        if draft.get("reason"):
+            st.caption(str(draft["reason"]))
+        return True
+    return False
 
 
 def render_sale_to_cash(st) -> None:  # pragma: no cover - UI
