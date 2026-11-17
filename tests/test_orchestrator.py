@@ -1031,3 +1031,15 @@ def test_keywords_come_from_the_founders_words_when_the_model_gives_none(run, mo
     assert "football" in f"{kw['problem']} {kw['solution']}".lower()
     plan = orchestrator.get_state("disc-kw")["search_plan"]
     assert any("football" in p["query"].lower() for p in plan if p["evidence_type"] == "pain")
+
+
+def test_placeholder_and_later_unclear_text_are_ignored():
+    assert not discovery._useful("Here's what I understood: <your own 2-3 sentences about this idea>")
+    assert not discovery._useful("Unclear: not stated yet.")
+    assert discovery._useful("Here's what I understood: players want highlight clips.")
+    disc = {"model_assumptions": {"why_now": "Phones film in HD"}, "answers": [], "corrections": []}
+    _, assumptions = discovery.build_understanding(FOOTBALL, disc)
+    assert {a["type"]: a["text"] for a in assumptions}["why_now"] == "Phones film in HD"
+    assert discovery.question_type("What problem do they face today with filming matches?") == "problem"
+    assert discovery.question_type("What do they do now to get highlight clips?") == "current_alternative"
+    assert discovery.question_type("Why is this the right time?") == "why_now"

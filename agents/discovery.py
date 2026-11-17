@@ -92,8 +92,18 @@ def _text(value: Any) -> str:
     return str(value).strip() if isinstance(value, (str, int, float)) else ""
 
 
+def _prompt_text() -> str:
+    from agents._common import load_prompt
+
+    return " ".join(load_prompt("discovery").lower().split())
+
+
 def _useful(text: str) -> bool:
-    return bool(text) and not re.match(r"^\s*(unclear|unknown|not stated|n/?a|none)\b", text, re.I)
+    """Non-empty, not "Unclear", and not copied from the prompt's example (qwen3:4b did both)."""
+    if not text or re.match(r"^\s*(unclear|unknown|not stated|n/?a|none)\b", text, re.I):
+        return False
+    core = " ".join(re.sub(r"^\s*here'?s what i understood:\s*", "", text, flags=re.I).lower().split())
+    return len(core) > 3 and core not in _prompt_text()
 
 
 def normalize_discovery(data: Any) -> dict[str, Any]:
@@ -148,14 +158,14 @@ def question_type(text: str) -> Optional[str]:
     t = text.lower()
     if re.search(r"\b(pay|paid|price|pricing|cost|charge|subscription|free)\b", t):
         return "payment"
-    if re.search(r"\b(why now|now|timing|right time)\b", t):
+    if re.search(r"\b(problem|pain|frustrat|struggle|wrong|hard|difficult|face)\b", t):
+        return "problem"
+    if re.search(r"\bwhy\b.*\bnow\b|\bright time\b|\btiming\b|\bwhy (is )?this the\b", t):
         return "why_now"
-    if re.search(r"\b(instead|currently|today|alternative|already use|use now|how do they)\b", t):
+    if re.search(r"\b(instead|currently|today|now|alternative|already use|do they do|how do they)\b", t):
         return "current_alternative"
     if re.search(r"\b(who|which (players|users|customers|people)|target|user|customer)\b", t):
         return "customer"
-    if re.search(r"\b(problem|pain|frustrat|struggle|wrong|hard)\b", t):
-        return "problem"
     return None
 
 
@@ -284,20 +294,26 @@ def prepare_node(state: dict[str, Any]) -> dict[str, Any]:
     result, usage = _hashish_round(module, state, round_no) if module else _model_round(state, round_no)
     if result["summary"]:
         disc["model_summary"] = result["summary"]
-    disc["model_assumptions"] = {**(disc.get("model_assumptions") or {}), **result["assumptions"]}
+    # A later "Unclear" never replaces earlier useful text from the model.
+    disc["model_assumptions"] = {**(disc.get("model_assumptions") or {}),
+                                 **{t: v for t, v in result["assumptions"].items() if _useful(v)}}
     summary, assumptions = build_understanding(state["brief"], disc)
     unclear = [a["type"] for a in assumptions if a["text"] == UNCLEAR]
 
     questions: list[dict[str, Any]] = []
     if round_no <= MAX_ROUNDS:
-        for i, q in enumerate(result["questions"][:4]):
+        seen: set = set()
+        for i, q in enumerate(result["questions"]):
             qtype = q.get("type") or question_type(q["text"])
+            if qtype in seen:
+                continue  # one question per assumption
+            seen.add(qtype)
             questions.append(question(f"r{round_no}q{i + 1}", q["text"], q.get("why", ""), q.get("suggestions"),
                                       qtype=qtype))
+        questions = questions[:3]
         asked = {q["type"] for q in questions}
-        # Anything nobody has covered yet gets a Python question (round 1, and round 2 if still vague).
-        questions += [question(f"r{round_no}_{t}", *TYPE_QUESTIONS[t], qtype=t)
-                      for t in unclear if t not in asked][: max(0, 4 - len(questions))]
+        # Every assumption nobody has covered yet gets a question (round 1, and round 2 if still vague).
+        questions += [question(f"r{round_no}_{t}", *TYPE_QUESTIONS[t], qtype=t) for t in unclear if t not in asked]
         if round_no == 1:
             questions += [question(f, intake.QUESTIONS[f], "Feeds the founder-fit and feasibility scores.",
                                    choices=FIELD_CHOICES.get(f)) for f in intake.missing_fields(state["brief"])]
