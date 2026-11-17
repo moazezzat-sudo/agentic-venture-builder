@@ -1,8 +1,11 @@
 services:
+  # Fallback local model server, for people with nothing installed. If Ollama already
+  # runs natively (for example Ollama for Windows with a GPU), set
+  # OLLAMA_BASE_URL=http://host.docker.internal:11434 in .env and start only the app:
+  #   docker compose up --no-deps app
+  # No host port is published, so this never clashes with a native Ollama on 11434.
   ollama:
     image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
@@ -11,7 +14,7 @@ services:
       timeout: 5s
       retries: 30
 
-  # Downloads the open-weight model once (kept in the ollama_data volume).
+  # Downloads the open-weight model(s) once (kept in the ollama_data volume).
   model-pull:
     image: ollama/ollama:latest
     depends_on:
@@ -19,7 +22,10 @@ services:
         condition: service_healthy
     environment:
       - OLLAMA_HOST=ollama:11434
-    entrypoint: ["sh", "-c", "ollama pull ${OLLAMA_MODEL:-qwen3:8b}"]
+    entrypoint:
+      - sh
+      - -c
+      - ollama pull ${OLLAMA_MODEL:-qwen3:8b} && if [ -n "${OLLAMA_FAST_MODEL:-}" ]; then ollama pull ${OLLAMA_FAST_MODEL:-}; fi
     restart: "no"
 
   app:
@@ -27,13 +33,21 @@ services:
     working_dir: /workspace
     volumes:
       - ./outputs:/workspace/outputs
+      # The repository folder, so decision_log.json is written to the repo root on the
+      # host and survives the container (a single-file mount breaks the logger's atomic write).
+      - .:/repo
     env_file:
       - path: .env
         required: false
     environment:
       - LLM_PROVIDER=${LLM_PROVIDER:-auto}
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:8b}
+      - OLLAMA_FAST_MODEL=${OLLAMA_FAST_MODEL:-}
+      - DECISION_LOG_PATH=/repo/decision_log.json
+    extra_hosts:
+      # Lets http://host.docker.internal reach a native Ollama on Linux too (built in on Windows/Mac).
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     depends_on:
