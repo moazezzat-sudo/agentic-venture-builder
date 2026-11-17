@@ -7,7 +7,7 @@ Scale for every criterion: 0 = no evidence or clearly fails, 1 = weak, 2 = mixed
 Criteria:
 - `problem_evidence`: is the pain real, frequent and costly? Needs several independent sources. Tier D sources count only as signals; ASSUMPTIONs count for nothing.
 - `market`: enough reachable customers in the target location? Only tier A or B numbers count.
-- `competition`: who already solves it, and is anything here clearly better? Score 0 only when a sourced claim shows a free tool already solves the same problem; a 0 stops the idea. No evidence about competitors at all scores 1, not 0.
+- `competition`: who already solves it, and is anything here clearly better? Score 0 only when a sourced claim shows a **free** tool already solves the same problem; a 0 stops the idea. Paid competitors are not a 0: score 1 or 2 depending on whether anything here is clearly better. No evidence about competitors at all scores 1, not 0.
 - `founder_fit`: do the founder's and team's skills match what the idea needs? Use only the brief.
 - `feasibility`: can an MVP be built with the stated budget, time and skills?
 - `willingness_to_pay`: evidence that people pay for this kind of solution (competitor prices, paid alternatives).

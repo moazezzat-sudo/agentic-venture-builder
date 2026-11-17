@@ -8,9 +8,10 @@ computed here: that is gates.py.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Iterable
 
-from agents._common import ask_json, brief_for_model, cut
+from agents._common import ask_json, brief_for_model, claims_markdown, cut
 from gates import criteria_names, load_rubric
 from logger import log_action, write_output
 
@@ -18,6 +19,10 @@ from logger import log_action, write_output
 # (problem_evidence at 0, since "no evidence" is 0 on the rubric scale).
 EVIDENCE_CRITERIA = ("problem_evidence", "market", "competition", "willingness_to_pay")
 WEAK = 1.0
+PRICE = re.compile(
+    r"(\$\s?\d|\d\s?(usd|eur|egp|gbp|dollars?)\b|\b(usd|eur|egp|gbp)\s?\d|\bper (month|year|user|seat)\b|/\s?(mo|month|yr|year)\b|\bpaid plans?\b|\bpricing\b)",
+    re.I,
+)
 
 
 def current_claims(state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -32,6 +37,10 @@ def evidence_caps(claims: Iterable[dict[str, Any]]) -> dict[str, tuple[float, st
     caps: dict[str, tuple[float, str]] = {}
     for name in EVIDENCE_CRITERIA:
         sourced = [c for c in claims if c.get("area") == name and c.get("support") == "url"]
+        if name == "willingness_to_pay":
+            # A competitor's stated price is evidence that people pay for this kind of solution.
+            sourced += [c for c in claims if c.get("area") == "competition" and c.get("support") == "url"
+                        and PRICE.search(c.get("text", ""))]
         if name == "market":
             sourced = [c for c in sourced if c.get("tier") in ("A", "B")]
             if not sourced:
@@ -70,11 +79,21 @@ def clean_scores(raw_scores: Any, raw_reasons: Any, claims: list[dict[str, Any]]
             scores[name] = cap
             notes[name] = f"{notes[name]} ({why})"
     # Competition 0 stops the idea ("a free tool already solves it"), so it must rest on a sourced
-    # competitor claim. With none, the model is reporting missing evidence, which is a 1.
-    if scores["competition"] == 0 and "competition" in evidence_caps(claims):
+    # claim that a competitor is free. Paid competitors, or none found, are not a 0.
+    if scores["competition"] == 0 and not free_competitor_claims(claims):
         scores["competition"] = WEAK
-        notes["competition"] = f"{notes['competition']} (raised to 1: a 0 needs a sourced competitor claim)"
+        notes["competition"] = f"{notes['competition']} (raised to 1: a 0 needs a sourced claim that a free tool solves it)"
     return scores, notes
+
+
+def free_competitor_claims(claims: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Sourced competitor claims that say the tool is free (a plain word check, not a judgement)."""
+    return [
+        c for c in claims
+        if c.get("area") == "competition" and c.get("support") == "url"
+        and re.search(r"\bfree\b", c.get("text", ""), re.I)
+        and not re.search(r"\bfree (trial|plan for \d|for \d+ days)\b", c.get("text", ""), re.I)
+    ]
 
 
 def make_node(step: int, name: str):
@@ -102,8 +121,9 @@ def make_node(step: int, name: str):
         write_output(1, step, name, (
             f"# Phase 1, step {step}: rubric scores (round {state.get('round', 1)})\n\n"
             "| Criterion | Weight | Score (0-4) | Reason |\n|---|---|---|---|\n" + rows + "\n\n"
-            "Claim numbers in the reasons refer to this round's claims in the research outputs. "
-            "Weights and cut-offs are our design choices (rubric.yaml).\n"
+            "Weights and cut-offs are our design choices (rubric.yaml).\n\n"
+            "## Claims the scorer saw\n\nThe numbers in the reasons, like [2], refer to this list.\n\n"
+            + claims_markdown(claims) + "\n"
         ))
         return {"scores": scores, "score_notes": notes, "tokens": usage["tokens"]}
 
