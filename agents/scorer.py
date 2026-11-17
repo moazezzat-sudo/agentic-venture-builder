@@ -153,6 +153,52 @@ def clean_scores(raw: Any, claims: list[dict[str, Any]], state: Optional[dict[st
     return scores, notes, cited, incomplete
 
 
+_SCORE_TEXT = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def _key(name: Any) -> str:
+    return re.sub(r"[^a-z]+", "_", str(name).lower()).strip("_")
+
+
+def _score_value(value: Any) -> Any:
+    """2, 2.5, "2", "2/4", "score: 3" -> a number; anything else unchanged."""
+    if isinstance(value, str):
+        m = _SCORE_TEXT.search(value)
+        return float(m.group()) if m else value
+    return value
+
+
+def normalize_scores(data: Any) -> dict[str, Any]:
+    """Accept the shapes small local models actually return and turn them into
+    {criterion: {score, claim_ids, reasoning}}. Unknown keys are ignored; nothing is invented."""
+    if not isinstance(data, dict):
+        return {}
+    wanted = {_key(n): n for n in MODEL_CRITERIA}
+    reasons = data.get("reasons") if isinstance(data.get("reasons"), dict) else {}
+    reasons = {_key(k): v for k, v in reasons.items()}
+    source: Any = data.get("criteria") or data.get("scores") or data.get("rubric") or data
+    if isinstance(source, list):
+        source = {str(e.get("criterion") or e.get("name") or ""): e for e in source if isinstance(e, dict)}
+    out: dict[str, Any] = {}
+    if not isinstance(source, dict):
+        return out
+    for raw_key, entry in source.items():
+        name = wanted.get(_key(raw_key))
+        if not name:
+            continue
+        if isinstance(entry, dict):
+            score = entry.get("score", entry.get("value"))
+            ids = entry.get("claim_ids") or entry.get("claims") or []
+            reasoning = entry.get("reasoning") or entry.get("reason") or entry.get("explanation")
+        else:
+            score, ids, reasoning = entry, [], None
+        if isinstance(ids, str):
+            ids = re.findall(r"C\d+", ids)
+        out[name] = {"score": _score_value(score), "claim_ids": ids,
+                     "reasoning": reasoning or reasons.get(_key(raw_key))}
+    return out
+
+
 def free_competitor_claims(claims: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """Sourced competitor claims that say the tool is free (a plain word check, not a judgement)."""
     return [
@@ -182,7 +228,7 @@ def make_node(step: int, name: str):
             "skeptic_checks": state.get("claim_checks") or [],
         }
         data, usage = ask_json("scorer", payload, role="smart", max_tokens=900, temperature=0)
-        scores, notes, cited, incomplete = clean_scores(data.get("criteria"), claims, state)
+        scores, notes, cited, incomplete = clean_scores(normalize_scores(data), claims, state)
 
         log_action(
             agent="scorer", action=f"score_rubric_{name}", sources=sorted({c["url"] for c in claims if c.get("url")}),

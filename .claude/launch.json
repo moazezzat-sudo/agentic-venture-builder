@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "app-scratch",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.port", "8000", "--server.headless", "true"],
+      "port": 8000,
+      "env": {
+        "OUTPUTS_DIR": "C:/Users/eyada/AppData/Local/Temp/claude/ccbcb1e00a0a7340/12afc9ff-149b-4297-a3d3-0913cc1688bb/scratchpad/app1/outputs",
+        "DECISION_LOG_PATH": "C:/Users/eyada/AppData/Local/Temp/claude/ccbcb1e00a0a7340/12afc9ff-149b-4297-a3d3-0913cc1688bb/scratchpad/app1/log.json",
+        "CHECKPOINT_DB": "C:/Users/eyada/AppData/Local/Temp/claude/ccbcb1e00a0a7340/12afc9ff-149b-4297-a3d3-0913cc1688bb/scratchpad/app1/ckpt.sqlite",
+        "LLM_PROVIDER": "groq"
+      }
+    }
+  ]
+}

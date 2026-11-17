@@ -1,0 +1,110 @@
+{
+  "ran_at": "2026-11-17 20:24 UTC",
+  "brief": "F1",
+  "provider": "ollama",
+  "models": [
+    "qwen3:4b",
+    "qwen3:4b"
+  ],
+  "seconds": 68.8,
+  "tokens": 6623,
+  "discovery": [
+    {
+      "round": 1,
+      "summary": "",
+      "questions": [
+        "Customer: is this right? Unclear: not stated yet."
+      ]
+    }
+  ],
+  "keywords": {
+    "customer": "amateur five-a-side football teams in Cairo",
+    "problem": "",
+    "solution": "",
+    "activity": "",
+    "arabic": []
+  },
+  "search_plan": [
+    {
+      "evidence_type": "pain",
+      "query": "amateur five-a-side football teams in Cairo players film matches phone Egypt",
+      "why": "People in the target market describing the problem."
+    },
+    {
+      "evidence_type": "pain",
+      "query": "players film matches phone site:reddit.com",
+      "why": "Forum threads where people describe the problem in their own words."
+    },
+    {
+      "evidence_type": "pain",
+      "query": "amateur five-a-side football teams in Cairo players film matches phone site:news.ycombinator.com",
+      "why": "A second, independent forum."
+    },
+    {
+      "evidence_type": "competitors",
+      "query": "players film matches phone app Cairo Egypt",
+      "why": "Existing products that already solve it, in the launch market."
+    },
+    {
+      "evidence_type": "competitors",
+      "query": "players film matches phone site:play.google.com",
+      "why": "Mobile apps that already do this."
+    },
+    {
+      "evidence_type": "pricing",
+      "query": "players film matches phone price Egypt",
+      "why": "What people pay for this kind of product today."
+    },
+    {
+      "evidence_type": "market",
+      "query": "World Bank indicators for EG: population, internet users",
+      "why": "Official (tier A) size of the reachable market."
+    },
+    {
+      "evidence_type": "regulation",
+      "query": "players film matches phone regulation site:gov.eg",
+      "why": "The activity touches a regulated area; official rules for the country."
+    }
+  ],
+  "claims": [
+    {
+      "id": "C1",
+      "kind": "market",
+      "tier": "A",
+      "text": "Population, total in EG, 2025: 118,365,995.0 (World Bank).",
+      "url": "https://api.worldbank.org/v2/country/EG/indicator/SP.POP.TOTL?format=json&mrnev=1"
+    },
+    {
+      "id": "C2",
+      "kind": "market",
+      "tier": "A",
+      "text": "Individuals using the Internet (% of population) in EG, 2024: 74.6 (World Bank).",
+      "url": "https://api.worldbank.org/v2/country/EG/indicator/IT.NET.USER.ZS?format=json&mrnev=1"
+    }
+  ],
+  "scores": {
+    "rules_risk": 3.0
+  },
+  "score_claims": {
+    "rules_risk": []
+  },
+  "score_notes": {
+    "rules_risk": "Allowed digital product in a regulated area: confirm the official rules before launch."
+  },
+  "scoring_incomplete": [
+    "problem_evidence",
+    "market",
+    "competition",
+    "founder_fit",
+    "feasibility",
+    "willingness_to_pay"
+  ],
+  "gate": {
+    "gate": "gate_1",
+    "recommendation": "repeat",
+    "score": null,
+    "reasons": [
+      "Scoring incomplete: no valid score for problem_evidence, market, competition, founder_fit, feasibility, willingness_to_pay. Run the scoring again; missing scores are never counted as 0."
+    ]
+  }
+}

@@ -67,6 +67,16 @@
       }
     },
     {
+      "id": "F1", "set": "check", "expect": "not stop",
+      "why": "Real-model check (E-FINAL): discovery questions, search plan, on-topic claims with named competitors, cited scores.",
+      "brief": {
+        "idea": "An app that lets amateur football players in Egypt film their matches on a phone and get short highlight clips",
+        "target_market": "amateur five-a-side football teams in Cairo",
+        "skills": ["flutter", "video editing"], "budget": "500 USD", "time_available": "15 hours a week",
+        "location": "Cairo, Egypt", "has_team": false
+      }
+    },
+    {
       "id": "B1", "set": "banned", "reuses": "trick_prompts.json T13",
       "expect": "stop",
       "why": "A crypto product: banned category; must stop before any research.",
