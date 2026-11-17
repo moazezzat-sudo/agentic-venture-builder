@@ -11,14 +11,14 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from agents._common import SNIPPET_CHARS, ask_json, claims_markdown, cut
+from agents._common import SNIPPET_CHARS, ask_json, claims_markdown, cut, model_fields
 from logger import log_action, write_output
 from schemas import Claim
 
 CRITERIA = ("problem_evidence", "market", "competition", "willingness_to_pay", "rules_risk")
 TIER_AB_ONLY = {"market": "a market figure", "rules_risk": "evidence on regulation"}
-MAX_RESULTS = 3
-MAX_CLAIMS = 4
+MAX_RESULTS = 3  # per search; an area runs its main query and, usually, one forum query
+MAX_CLAIMS = 5
 
 # ISO codes for the World Bank lookup, matched as whole words in brief["location"].
 COUNTRY_CODES = {
@@ -107,18 +107,36 @@ def build_claims(raw: Any, sources: list[dict[str, Any]], round_no: int) -> list
     return claims
 
 
+def gather_sources(area: dict[str, Any]) -> list[dict[str, Any]]:
+    """Top results for the area's query, plus its forum query (people describing the problem), if any.
+
+    Each search gives at most MAX_RESULTS; duplicates are dropped and sources renumbered from 0.
+    """
+    found = find_sources(area["query"])
+    if area.get("forum_query"):
+        found += [dict(s, forum=True) for s in find_sources(area["forum_query"])]
+    sources, seen = [], set()
+    for s in found:
+        if s["url"] in seen:
+            continue
+        seen.add(s["url"])
+        sources.append({**s, "i": len(sources)})
+    return sources
+
+
 def research(area: dict[str, Any], brief: dict[str, Any], round_no: int) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
     """Returns (claims, usage, sources). No model call when the search finds nothing."""
-    sources = find_sources(area["query"])
-    usage: dict[str, Any] = {"tokens": 0, "cost": 0.0, "model": None, "parsed": None}
+    sources = gather_sources(area)
+    usage: dict[str, Any] = {"tokens": 0, "cost": 0.0, "model": None, "parsed": None, "retried": False}
     claims: list[dict[str, Any]] = []
     if sources:
         payload = {
             "idea": cut(brief.get("idea"), 300), "location": brief.get("location"), "area": area["name"],
             "looking_for": area.get("focus", "problem"),
-            "sources": [{k: s[k] for k in ("i", "tier", "title", "snippet")} for s in sources],
+            "sources": [{k: s[k] for k in ("i", "tier", "title", "snippet")} | ({"forum": True} if s.get("forum") else {})
+                        for s in sources],
         }
-        data, usage = ask_json("researcher", payload, role="fast", max_tokens=450)
+        data, usage = ask_json("researcher", payload, role="fast", temperature=0)
         claims = build_claims(data.get("claims"), sources, round_no)
     return claims, usage, sources
 
@@ -133,12 +151,15 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
     stubbed = _stubbed_tools()
     log_action(
         agent="researcher", action="research_area" if sources else "research_area_no_results",
-        sources=[s["url"] for s in sources], model=usage["model"], cost=usage["cost"], tokens=usage["tokens"],
-        area=area["name"], query=area["query"], round=round_no, stubbed_tools=stubbed,
+        sources=[s["url"] for s in sources], run_id=state.get("run_id"), round=round_no, **model_fields(usage),
+        area=area["name"], query=area["query"], forum_query=area.get("forum_query"), stubbed_tools=stubbed,
     )
-    src_lines = "\n".join(f"- tier {s['tier']}: [{s['title'] or s['url']}]({s['url']})" for s in sources) or "_The search returned no results._"
+    src_lines = "\n".join(
+        f"- tier {s['tier']}{' (forum)' if s.get('forum') else ''}: [{s['title'] or s['url']}]({s['url']})" for s in sources
+    ) or "_The search returned no results._"
+    forum = f"\n\nForum query: `{area['forum_query']}`" if area.get("forum_query") else ""
     write_output(1, 4, f"research {area['name']}", (
         f"# Phase 1, step 4: research on \"{area['name']}\" (round {round_no})\n\n"
-        f"Query: `{area['query']}`\n\n## Sources\n\n{src_lines}\n\n## Claims\n\n{claims_markdown(claims)}\n"
+        f"Query: `{area['query']}`{forum}\n\n## Sources\n\n{src_lines}\n\n## Claims\n\n{claims_markdown(claims)}\n"
     ), status="STUBBED" if stubbed else "Working")
     return {"claims": claims, "tokens": usage["tokens"]}

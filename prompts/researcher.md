@@ -13,7 +13,8 @@ Rules:
 - For a competitor, say whether it is free or paid when the snippet says so ("free", "free trial", "from 10 USD a month"); say nothing about price when it doesn't.
 - Never invent numbers, prices, user counts or market sizes. Copy numbers only as they appear in a snippet.
 - No praise, no predictions of income or success. Report what the sources say, including evidence against the idea.
-- At most 4 claims, each under 200 characters.
+- Forum sources (tier D, `"forum": true`) are people describing their own problem: use them for `problem_evidence`, one claim per distinct thread that shows the pain.
+- At most 5 claims, each under 200 characters.
 
 Reply with JSON only, no prose, in exactly this shape:
 

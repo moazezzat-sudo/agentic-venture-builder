@@ -9,13 +9,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from agents._common import ask_json, brief_for_model, cut
+from agents._common import ask_json, brief_for_model, cut, model_fields
 from logger import log_action, write_output
 
 INNOVATION_TYPES = ("new_product", "better_product", "cheaper_product", "new_market")
 FOCUSES = ("problem", "competitors", "pricing")
 REQUIRED_FOCUSES = ("problem", "competitors")
 MAX_AREAS = 3
+# One forum search per area, so people describing the problem in their own words can be found.
+# Alternating sites gives independent sources (independence is counted by domain).
+FORUM_SITES = ("reddit.com", "news.ycombinator.com")
 
 
 def _fallback_area(focus: str, brief: dict[str, Any]) -> dict[str, Any]:
@@ -23,8 +26,14 @@ def _fallback_area(focus: str, brief: dict[str, Any]) -> dict[str, Any]:
     who = cut(brief.get("target_market") or brief.get("idea") or "", 70)
     where = cut(brief.get("location") or "", 30)
     suffix = {"problem": "problems complaints forum", "competitors": "tools apps"}[focus]
-    return {"name": f"{focus} ({who})", "focus": focus, "weight": 0.0,
+    return {"name": f"{focus} ({who})", "focus": focus, "weight": 0.0, "problem": "",
             "query": cut(" ".join(p for p in (who, where, suffix) if p), 120)}
+
+
+def forum_query(area: dict[str, Any], index: int, brief: dict[str, Any]) -> str:
+    """'<problem> site:reddit.com' or '... site:news.ycombinator.com', from the area's problem phrase."""
+    problem = area.get("problem") or brief.get("target_market") or area["name"]
+    return cut(f"{cut(problem, 80)} site:{FORUM_SITES[index % len(FORUM_SITES)]}", 120)
 
 
 def clean_areas(raw: Any, brief: dict[str, Any]) -> list[dict[str, Any]]:
@@ -39,7 +48,8 @@ def clean_areas(raw: Any, brief: dict[str, Any]) -> list[dict[str, Any]]:
         except (TypeError, ValueError):
             weight = 0.0
         focus = a.get("focus") if a.get("focus") in FOCUSES else "problem"
-        areas.append({"name": cut(a["name"], 60), "focus": focus, "weight": weight, "query": cut(a["query"], 120)})
+        areas.append({"name": cut(a["name"], 60), "focus": focus, "weight": weight, "query": cut(a["query"], 120),
+                      "problem": cut(a.get("problem") or "", 80)})
         if len(areas) == MAX_AREAS:
             break
     for focus in REQUIRED_FOCUSES:
@@ -56,8 +66,9 @@ def clean_areas(raw: Any, brief: dict[str, Any]) -> list[dict[str, Any]]:
         else:
             areas.append(extra)
     total = sum(a["weight"] for a in areas)
-    for a in areas:
+    for i, a in enumerate(areas):
         a["weight"] = round(a["weight"] / total, 2) if total else round(1 / len(areas), 2)
+        a["forum_query"] = forum_query(a, i, brief)
     return areas
 
 
@@ -67,7 +78,7 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
     coach = state.get("coach_notes") or {}
     if coach:
         payload["coach"] = {k: coach.get(k) for k in ("revised_idea", "missing_evidence", "queries")}
-    data, usage = ask_json("weigher", payload, role="fast", max_tokens=400)
+    data, usage = ask_json("weigher", payload, role="fast", temperature=0)
 
     areas = clean_areas(data.get("areas"), brief)
     # On a repeat, the coach's queries replace the weigher's, area by area.
@@ -76,13 +87,16 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
     innovation = data.get("innovation_type") if data.get("innovation_type") in INNOVATION_TYPES else "unknown"
 
     log_action(
-        agent="weigher", action="split_areas", model=usage["model"], cost=usage["cost"],
-        tokens=usage["tokens"], round=state.get("round", 1), parsed=usage["parsed"],
+        agent="weigher", action="split_areas", run_id=state.get("run_id"), round=state.get("round", 1),
+        **model_fields(usage),
     )
-    rows = "\n".join(f"| {a['name']} | {a['focus']} | {a['weight']:.2f} | {a['query']} |" for a in areas)
+    rows = "\n".join(
+        f"| {a['name']} | {a['focus']} | {a['weight']:.2f} | {a['query']} | {a['forum_query']} |" for a in areas
+    )
     write_output(1, 3, "areas", (
         f"# Phase 1, step 3: business areas (round {state.get('round', 1)})\n\n"
-        f"Innovation type: **{innovation}**\n\n| Area | Looks for | Weight | Search query |\n|---|---|---|---|\n{rows}\n\n"
+        f"Innovation type: **{innovation}**\n\n| Area | Looks for | Weight | Search query | Forum query |\n"
+        f"|---|---|---|---|---|\n{rows}\n\n"
         "Weights are the model's split of the idea, normalised to sum to 1 (design choice, not a market claim).\n"
     ))
     return {"areas": areas, "innovation_type": innovation, "tokens": usage["tokens"]}
