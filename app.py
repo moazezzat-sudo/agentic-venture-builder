@@ -854,7 +854,7 @@ def render_questions(st, result: dict[str, Any], state: dict[str, Any], call, ru
                     for i, s in enumerate(q["suggestions"]):
                         row.button(s, key=f"{key}_chip{i}", on_click=_fill, args=(st.session_state, key, s))
                 answers[q["id"]] = st.text_area(q["text"], key=key, label_visibility="collapsed",
-                                                placeholder="Type here, or click a suggestion")
+                                                placeholder="Type here, or click a suggestion" if q["suggestions"] else "Type here")
     label = "Send and start the research" if stage == "intake" else "Send answers"
     if st.button(label, type="primary", key=f"send_{stage}_{rnd}"):
         reply: dict[str, Any] = {"answers": {k: v for k, v in answers.items() if str(v).strip()}}
