@@ -26,9 +26,16 @@ PRICE = re.compile(
 
 
 def current_claims(state: dict[str, Any]) -> list[dict[str, Any]]:
-    """Claims that count for the idea as it stands: a repeat keeps earlier evidence, a pivot starts fresh."""
+    """Claims that count for the idea as it stands.
+
+    A repeat keeps all earlier evidence. A pivot keeps the pain and changes the idea (prompts/coach.md),
+    so sourced problem-evidence claims from earlier rounds carry over; everything else starts fresh.
+    """
     since = state.get("evidence_from_round", 1)
-    return [c for c in state.get("claims", []) if c.get("round", 1) >= since]
+    return [
+        c for c in state.get("claims", [])
+        if c.get("round", 1) >= since or (c.get("area") == "problem_evidence" and c.get("support") == "url")
+    ]
 
 
 def evidence_caps(claims: Iterable[dict[str, Any]]) -> dict[str, tuple[float, str]]:

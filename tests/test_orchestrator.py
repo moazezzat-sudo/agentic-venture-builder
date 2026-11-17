@@ -184,7 +184,12 @@ def test_pivot_loops_through_coach(run):
     assert r["kind"] == "gate" and r["gate"] == "gate_1"
     state = orchestrator.get_graph().get_state(orchestrator._config("pivot")).values
     assert state["round"] == 2 and state["brief"]["idea"].startswith("Invoice templates")
-    assert all(c["round"] == 2 for c in orchestrator.current_claims(state))
+    # A pivot keeps the pain: sourced problem evidence from round 1 still counts; nothing else does.
+    old = [c for c in orchestrator.current_claims(state) if c["round"] == 1]
+    assert old and all(c["area"] == "problem_evidence" and c["support"] == "url" for c in old)
+    assert any(c["round"] == 2 for c in orchestrator.current_claims(state))
+    assert not [c for c in state["claims"] if c["round"] == 1 and c["area"] == "competition"
+                and c in orchestrator.current_claims(state)]
 
 
 def test_interview_kit_on_go_repeat_pivot_not_on_stop(run):
