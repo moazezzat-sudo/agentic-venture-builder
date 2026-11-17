@@ -11,8 +11,8 @@ Rules:
   - `pricing`: do people pay for it? The query looks for prices or paid plans of existing solutions.
 - Always include one `problem` area and one `competitors` area.
 - Name areas after the customer's world (for example "invoicing for freelancers with foreign clients"), never after the founder's tasks ("product development", "market research", "marketing").
-- Queries describe the customer and the problem, never the founder's skills or tech stack (no "Python", "web app", "AI"). Include the location when the brief gives one. Keep them under 12 words.
-- Each area also gets `problem`: the customer's problem in 3 to 6 plain words, the way they would type it on a forum (for example "clients pay invoices late"). No location, no product names.
+- Queries describe the customer and the problem, never the founder's skills or tech stack (no "Python", "web app", "AI"). Put the location only in `competitors` and `pricing` queries; a `problem` query without a place finds more people describing the pain. Keep them under 12 words.
+- Each area also gets `problem`: who has the problem and the complaint, in 4 to 8 plain words, the way that person would title a forum post (for example "freelancer clients pay invoices late", "restaurant no-shows phone bookings"). Name the person; no "how to", no location, no product names.
 - Each area gets a weight between 0 and 1, larger for what the idea depends on most; the weights should add up to about 1.
 - Tag the innovation type: one of `new_product`, `better_product`, `cheaper_product`, `new_market`.
 - Do not judge or praise the idea. Do not mention income, revenue or success. Never invent numbers.

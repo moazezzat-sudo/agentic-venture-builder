@@ -9,13 +9,22 @@ model states without a valid source becomes an ASSUMPTION.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Optional
 
 from agents._common import SNIPPET_CHARS, ask_json, claims_markdown, cut, model_fields
 from logger import log_action, write_output
 from schemas import Claim
 
 CRITERIA = ("problem_evidence", "market", "competition", "willingness_to_pay", "rules_risk")
+# Words models use instead of the rubric's names (seen: "pricing" left price claims untagged).
+CRITERION_ALIASES = {
+    "pricing": "willingness_to_pay", "price": "willingness_to_pay", "prices": "willingness_to_pay",
+    "willingness to pay": "willingness_to_pay", "wtp": "willingness_to_pay",
+    "competitors": "competition", "competitor": "competition",
+    "problem": "problem_evidence", "pain": "problem_evidence", "problem evidence": "problem_evidence",
+    "market_size": "market", "market size": "market",
+    "regulation": "rules_risk", "rules": "rules_risk", "risk": "rules_risk",
+}
 TIER_AB_ONLY = {"market": "a market figure", "rules_risk": "evidence on regulation"}
 MAX_RESULTS = 3  # per search; an area runs its main query and, usually, one forum query
 MAX_CLAIMS = 5
@@ -61,18 +70,37 @@ def relevant(query: str, result: dict[str, Any]) -> bool:
     """False when a result shares no meaningful word with the query (search fallbacks sometimes return
     unrelated pages, such as encyclopedia articles about large companies). Plain word overlap, no model."""
     wanted = _words(re.sub(r"site:\S+", "", query))
-    found = _words(f"{result.get('title', '')} {result.get('snippet', '')} {result.get('url', '')}")
+    url = str(result.get("url", ""))
+    if "wikipedia.org" in url:
+        # Encyclopedia fallbacks match loosely (an article on a restaurant chain mentions "restaurants"):
+        # count only words in the article's title.
+        found = _words(str(result.get("title", "")))
+    else:
+        found = _words(f"{result.get('title', '')} {result.get('snippet', '')} {url}")
     return not wanted or bool(wanted & found) or bool({w[:5] for w in wanted} & {w[:5] for w in found})
 
 
-def find_sources(query: str) -> list[dict[str, Any]]:
+# Engines that are not general web search (tools/search.py fallbacks). When only these answer,
+# web search was unreachable for that query.
+FALLBACK_ENGINES = ("wikipedia", "hn", "hackernews", "algolia")
+
+
+def web_answered(results: list[dict[str, Any]]) -> bool:
+    """True when a general web engine returned these results (results without an engine name count)."""
+    return any(not str(r.get("engine") or "").lower().startswith(FALLBACK_ENGINES) for r in results)
+
+
+def find_sources(query: str, web: Optional[list[bool]] = None) -> list[dict[str, Any]]:
     """Search and rate. Returns [{i, title, url, snippet, tier}]. Skips ads, redirects, results unrelated
-    to the query, and non-http(s) URLs."""
+    to the query, and non-http(s) URLs. If `web` is a list, appends whether a web engine answered."""
     from tools.credibility import rate
     from tools.search import search
 
     sources = []
-    for r in search(plain_query(query), max_results=MAX_RESULTS)[:MAX_RESULTS]:
+    results = search(plain_query(query), max_results=MAX_RESULTS)[:MAX_RESULTS]
+    if web is not None:
+        web.append(web_answered(results))
+    for r in results:
         url = str(r.get("url", ""))
         if AD_URL.match(url) or not relevant(query, r):
             continue
@@ -112,7 +140,8 @@ def build_claims(raw: Any, sources: list[dict[str, Any]], round_no: int) -> list
         if not isinstance(item, dict) or not str(item.get("text", "")).strip():
             continue
         text = cut(item["text"], 200)
-        criterion = item.get("criterion") if item.get("criterion") in CRITERIA else None
+        raw = str(item.get("criterion") or "").strip().lower()
+        criterion = raw if raw in CRITERIA else CRITERION_ALIASES.get(raw)
         src = item.get("source")
         source = sources[src] if isinstance(src, int) and not isinstance(src, bool) and 0 <= src < len(sources) else None
         if source is None:
@@ -130,16 +159,27 @@ def build_claims(raw: Any, sources: list[dict[str, Any]], round_no: int) -> list
     return claims
 
 
-def gather_sources(area: dict[str, Any]) -> list[dict[str, Any]]:
+def without_place(query: str, location: Any) -> str:
+    """The query with the founder's location words removed ("Cairo, Egypt" -> drops cairo and egypt)."""
+    places = {w.lower() for w in re.findall(r"[A-Za-z]+", str(location or "")) if len(w) > 2}
+    kept = [w for w in query.split() if re.sub(r"[^a-z]", "", w.lower()) not in places]
+    return " ".join(kept)
+
+
+def gather_sources(area: dict[str, Any], location: Any = None, web: Optional[list[bool]] = None) -> list[dict[str, Any]]:
     """Top results for the area's query, plus its forum query (people describing the problem), if any.
 
     Each search gives at most MAX_RESULTS; duplicates are dropped and sources renumbered from 0.
+    A main query naming a place often finds nothing; then it is tried once without the place.
     """
-    found = find_sources(area["query"])
+    found = find_sources(area["query"], web)
+    broader = without_place(area["query"], location)
+    if not found and broader and broader != area["query"]:
+        found = find_sources(broader, web)
     if area.get("forum_query"):
         # Keep only results from the forum itself: a search fallback that ignores "site:" returns other pages.
         site = re.search(r"site:(\S+)", area["forum_query"])
-        found += [dict(s, forum=True) for s in find_sources(area["forum_query"])
+        found += [dict(s, forum=True) for s in find_sources(area["forum_query"], web)
                   if not site or site.group(1).lower() in s["url"].lower()]
     sources, seen = [], set()
     for s in found:
@@ -152,7 +192,8 @@ def gather_sources(area: dict[str, Any]) -> list[dict[str, Any]]:
 
 def research(area: dict[str, Any], brief: dict[str, Any], round_no: int) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
     """Returns (claims, usage, sources). No model call when the search finds nothing."""
-    sources = gather_sources(area)
+    web: list[bool] = []
+    sources = gather_sources(area, brief.get("location"), web)
     usage: dict[str, Any] = {"tokens": 0, "cost": 0.0, "model": None, "parsed": None, "retried": False}
     claims: list[dict[str, Any]] = []
     if sources:
@@ -164,6 +205,7 @@ def research(area: dict[str, Any], brief: dict[str, Any], round_no: int) -> tupl
         }
         data, usage = ask_json("researcher", payload, role="fast", temperature=0)
         claims = build_claims(data.get("claims"), sources, round_no)
+    usage["web_search_ok"] = any(web)  # False: no web engine answered any of this area's searches
     return claims, usage, sources
 
 
@@ -175,10 +217,12 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         claims = country_facts(brief, round_no) + claims
 
     stubbed = _stubbed_tools()
+    web_ok = usage.get("web_search_ok", True)
     log_action(
         agent="researcher", action="research_area" if sources else "research_area_no_results",
         sources=[s["url"] for s in sources], run_id=state.get("run_id"), round=round_no, **model_fields(usage),
         area=area["name"], query=area["query"], forum_query=area.get("forum_query"), stubbed_tools=stubbed,
+        web_search_ok=web_ok,
     )
     src_lines = "\n".join(
         f"- tier {s['tier']}{' (forum)' if s.get('forum') else ''}: [{s['title'] or s['url']}]({s['url']})" for s in sources
@@ -188,4 +232,5 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         f"# Phase 1, step 4: research on \"{area['name']}\" (round {round_no})\n\n"
         f"Query: `{area['query']}`{forum}\n\n## Sources\n\n{src_lines}\n\n## Claims\n\n{claims_markdown(claims)}\n"
     ), status="STUBBED" if stubbed else "Working")
-    return {"claims": claims, "tokens": usage["tokens"]}
+    gaps = [] if web_ok else [{"round": round_no, "area": area["name"], "focus": area.get("focus", "problem")}]
+    return {"claims": claims, "tokens": usage["tokens"], "search_gaps": gaps}

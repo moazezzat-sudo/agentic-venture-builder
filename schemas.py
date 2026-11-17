@@ -134,3 +134,6 @@ class Briefcase(TypedDict, total=False):
     # guardrails.check_text hits: {source, rule, reason, excerpt, rewritable, round}.
     # rewritable=False: the founder's own words (gate -> stop); True: our drafts (gate -> repeat).
     text_violations: Annotated[list[dict[str, Any]], operator.add]
+    # Areas where no web search engine answered (only fallbacks, or nothing): {round, area, focus}.
+    # A stop that rests only on missing evidence becomes repeat (gates.evaluate_gate_1).
+    search_gaps: Annotated[list[dict[str, Any]], operator.add]
