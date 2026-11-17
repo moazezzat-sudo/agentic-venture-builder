@@ -7,6 +7,7 @@ sourced research claim to "unverified".
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from agents._common import ask_json, brief_for_model, cut
@@ -17,10 +18,26 @@ VERDICTS = ("supported", "contradicted", "unverified")
 MAX_CHECKS = 3
 
 
-def clean_checks(raw: Any, claims: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _norm(text: Any) -> str:
+    return " ".join(re.sub(r"[^a-z0-9 ]", " ", str(text or "").lower()).split())
+
+
+def restates_brief(statement: str, brief: dict[str, Any]) -> bool:
+    """True when the statement is just the idea or the target market repeated, not a claim to check."""
+    s = _norm(re.sub(r"^\s*(idea|target market|target)\s*:\s*", "", statement, flags=re.I))
+    for field in ("idea", "target_market"):
+        f = _norm(brief.get(field))
+        if s and f and (s == f or (len(s) >= 0.6 * len(f) and (s in f or f in s))):
+            return True
+    return False
+
+
+def clean_checks(raw: Any, claims: list[dict[str, Any]], brief: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     checks = []
     for item in (raw if isinstance(raw, list) else [])[:MAX_CHECKS]:
         if not isinstance(item, dict) or not str(item.get("statement", "")).strip():
+            continue
+        if brief and restates_brief(item["statement"], brief):
             continue
         verdict = item.get("verdict") if item.get("verdict") in VERDICTS else "unverified"
         evidence = [
@@ -44,7 +61,7 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
         "claims": [{"i": i, "text": c["text"], "tier": c.get("tier"), "support": c.get("support")} for i, c in enumerate(claims)],
     }
     data, usage = ask_json("skeptic", payload, role="smart", max_tokens=450)
-    checks = clean_checks(data.get("checks"), claims)
+    checks = clean_checks(data.get("checks"), claims, state["brief"])
 
     log_action(
         agent="skeptic", action="check_founder_claims", sources=sorted({u for c in checks for u in c["evidence"]}),

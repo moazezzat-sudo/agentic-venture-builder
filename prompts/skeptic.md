@@ -6,6 +6,8 @@ Input: JSON with the founder brief and numbered research claims `[{"i": 0, "text
 
 Rules:
 - Pick at most 3 statements from the brief that assert something about the world (the problem exists, people want this, nothing like it exists, people would pay, it is cheap to build). Skip statements about the founder's own skills or plans.
+- The idea's own description ("A web app that ...") is not a statement to check, and neither is the name of the target market. Check what the founder assumes about them: that this customer has the problem, that they would pay, that nothing already solves it. If the brief assumes nothing checkable, return fewer checks.
+- A vendor's marketing page shows that the vendor exists; it does not by itself show that customers have the problem.
 - For each, give a verdict:
   - `supported`: one or more research claims with a URL back it.
   - `contradicted`: one or more research claims go against it (for example, an existing competitor when the founder says there is none).

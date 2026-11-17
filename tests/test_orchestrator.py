@@ -266,6 +266,9 @@ def test_competition_zero_needs_a_sourced_competitor_claim():
     assert scores["competition"] == 1 and "raised to 1" in notes["competition"]
     claim = {"text": "Free tool X does this", "support": "url", "url": "https://x.example.com", "tier": "B", "area": "competition"}
     assert clean_scores(zero, {}, [claim])[0]["competition"] == 0
+    # Paid tools, or a free trial, are competition but not "a free tool already solves it".
+    for text in ["Plutio converts time logs into invoices", "Tool Y offers a free trial, then 12 USD a month"]:
+        assert clean_scores(zero, {}, [{**claim, "text": text}])[0]["competition"] == 1
 
 
 def test_world_bank_figures_become_tier_a_market_claims(run):
@@ -283,6 +286,62 @@ def test_no_world_bank_value_means_no_claim(run, monkeypatch):
     orchestrator.start_run(FULL_BRIEF, "worldbank-empty")
     state = orchestrator.get_graph().get_state(orchestrator._config("worldbank-empty")).values
     assert not [c for c in state["claims"] if "worldbank" in (c.get("url") or "")]
+
+
+def test_weigher_always_researches_problem_and_competitors():
+    from agents.weigher import clean_areas
+
+    # Model gave only founder-task areas with no focus: both required focuses are added.
+    areas = clean_areas([{"name": "Product Development", "weight": 0.6, "query": "python web app"}], FULL_BRIEF)
+    assert [a["focus"] for a in areas] == ["problem", "competitors"]
+    assert "python" not in areas[1]["query"].lower() and "Egypt" in areas[1]["query"]
+    # Three areas, none for competitors: one spare area is replaced, not appended.
+    three = [{"name": n, "focus": f, "weight": 1, "query": n} for n, f in
+             [("pain", "problem"), ("prices", "pricing"), ("more pain", "problem")]]
+    focuses = [a["focus"] for a in clean_areas(three, FULL_BRIEF)]
+    assert len(focuses) == 3 and "problem" in focuses and "competitors" in focuses
+    assert sum(a["weight"] for a in clean_areas(three, FULL_BRIEF)) == pytest.approx(1.0, abs=0.02)
+    # Nothing usable from the model still gives both.
+    assert [a["focus"] for a in clean_areas(None, FULL_BRIEF)] == ["problem", "competitors"]
+
+
+def test_ad_and_redirect_links_are_not_sources(monkeypatch):
+    from agents import researcher
+
+    monkeypatch.setattr(tools.search, "search", lambda q, max_results=3: [
+        {"title": "ad", "url": "https://www.bing.com/aclick?ld=abc&u=xyz", "snippet": "Try Xero"},
+        {"title": "ad", "url": "https://www.googleadservices.com/pagead/aclk?sa=L", "snippet": "ad"},
+        {"title": "real", "url": "https://www.xero.com/pricing", "snippet": "Plans from 15 USD"},
+    ])
+    monkeypatch.setattr(tools.credibility, "rate", lambda url: "B")
+    sources = researcher.find_sources("invoicing tools")
+    assert [s["url"] for s in sources] == ["https://www.xero.com/pricing"] and sources[0]["i"] == 0
+
+
+def test_competitor_price_counts_as_willingness_to_pay_evidence():
+    from agents.scorer import evidence_caps
+
+    base = {"support": "url", "url": "https://x.example.com", "tier": "B", "area": "competition"}
+    assert "willingness_to_pay" in evidence_caps([{**base, "text": "Plutio converts time logs to invoices"}])
+    for text in ["Plans cost $15-60/mo", "Studio Designer charges 49 USD per month"]:
+        assert "willingness_to_pay" not in evidence_caps([{**base, "text": text}])
+
+
+def test_skeptic_skips_restating_the_idea():
+    from agents.skeptic import clean_checks
+
+    claims = [{"text": "t", "support": "url", "url": "https://a.example.org"}]
+    raw = [{"statement": FULL_BRIEF["idea"], "verdict": "supported", "evidence": [0]},
+           {"statement": "Target market: freelance designers with foreign clients", "verdict": "supported", "evidence": [0]},
+           {"statement": "Designers lose hours each month writing invoices", "verdict": "supported", "evidence": [0]}]
+    checks = clean_checks(raw, claims, FULL_BRIEF)
+    assert [c["statement"] for c in checks] == ["Designers lose hours each month writing invoices"]
+
+
+def test_scores_file_lists_the_claims_the_reasons_cite(run):
+    orchestrator.start_run(FULL_BRIEF, "numbering")
+    text = (run["out"] / "phase1_step6_scores.md").read_text(encoding="utf-8")
+    assert "## Claims the scorer saw" in text and "\n0. " in text
 
 
 def test_model_cannot_invent_sources(run, monkeypatch):
