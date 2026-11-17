@@ -271,3 +271,56 @@ def test_empty_reply_defaults_to_a_local_database(env):
     env["use"]("{}", "{}")
     draft = phase3_build_plan.agent(dict(STATE))["drafts"]["phase3_build_plan"]
     assert draft["database"] == {"choice": "SQLite (local file)", "why": "", "local": True}
+
+
+# --------------------------------------------------------------------------- phase 6
+
+import payments  # noqa: E402
+from agents import phase6_memo  # noqa: E402
+
+MEMO = {
+    "summary": "These are MOCKED numbers; they can't tell us whether to persevere.",
+    "observations": ["One of four paid orders was refunded"],
+    "next_experiments": ["Run the waitlist test with real recruiters"],
+    "support_replies": [
+        {"situation": "Refund request", "reply": "Thanks for writing. I've passed your request to the founder, who will reply within two days."},
+        {"situation": "Can't access", "reply": "Sorry about that. Could you send the email you used at checkout?"},
+    ],
+}
+
+
+def test_memo_on_mocked_data_recommends_repeat(env):
+    fake = env["use"](MEMO)
+    update = phase6_memo.agent(dict(STATE))
+    draft = update["drafts"]["phase6_memo"]
+    assert draft["mocked"] is True and draft["recommendation"] == "repeat"
+    m = draft["metrics"]
+    assert (m["orders"], m["paid_orders"], m["refunded_orders"], m["reconciled"]) == (6, 4, 1, True)
+    assert m["net"] == 4 * 25000 - 4 * payments.mock_fee(25000) - 25000
+    sent = json.loads(fake.calls[0]["user"])
+    assert sent["recommendation"] == "repeat" and sent["mocked"] is True
+    assert all(r["sent"] is False for r in draft["support_replies"])
+    text = (env["out"] / "phase6_step1_memo.md").read_text(encoding="utf-8")
+    assert "**MOCKED data**" in text and "**REPEAT**" in text and "not the model" in text
+    assert _unsupported_lines(env["out"]) == []
+    # The MOCKED dataset logs nothing and claims no founder approval.
+    assert [e["agent"] for e in read_log(env)] == ["phase6_memo"]
+
+
+def test_support_reply_that_claims_a_refund_is_flagged(env):
+    bad = {**MEMO, "support_replies": [{"situation": "Refund", "reply": "I've refunded your payment already."}]}
+    env["use"](bad, bad)
+    assert "money_handling" in {v["rule"] for v in phase6_memo.agent(dict(STATE))["text_violations"]}
+
+
+@pytest.mark.parametrize("targets,expected", [
+    (None, "repeat"),
+    ({"paid_orders": 2, "max_refund_rate": 0.5}, "go"),
+    ({"paid_orders": 10, "max_refund_rate": 0.5}, "pivot"),
+    ({"paid_orders": 10, "max_refund_rate": 0.1}, "stop"),
+])
+def test_recommendation_rules_on_real_data(targets, expected):
+    metrics = phase6_memo.metrics_from(payments.mock_sales_data())  # paid 4, refund rate 0.25
+    rows = phase6_memo.compare(metrics, targets)
+    assert phase6_memo.recommend(mocked=False, rows=rows)[0] == expected
+    assert phase6_memo.recommend(mocked=True, rows=rows)[0] == "repeat"
