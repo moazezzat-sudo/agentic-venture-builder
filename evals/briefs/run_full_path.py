@@ -8,7 +8,8 @@ This is a test of the pipeline, not a founder's run, so the script answers the g
     and overrides_recommendation true), so every phase is reached;
   - at Gate 2 it sets a waitlist target of 100 and leaves the real count empty: no sign-ups
     are invented, so Gate 2 recommends repeat and the script overrides it.
-Founder questions (intake, coach) get no answers. Outputs, the decision log and checkpoints go
+Discovery and coach questions get no answers; the discovery summary is confirmed as is; at the
+build options it lets the build agent choose the format. Outputs, the decision log and checkpoints go
 to a temporary folder, never to outputs/ or decision_log.json. Prints per-phase seconds and
 tokens (tokens summed from that run's decision_log.json).
 """
@@ -69,7 +70,8 @@ def main(brief_id: str) -> int:
     result = timed(phase_of, orchestrator.start_run, brief, run_id)
     while result.get("awaiting_founder"):
         if result["kind"] == "questions":
-            answers = GATE_2_ANSWERS if result.get("stage") == "gate_2_targets" else {}
+            answers = {"gate_2_targets": GATE_2_ANSWERS, "discovery_confirm": {"confirm": "Yes, that's my idea"},
+                       "build_options": {"product_format": "Let the build agent choose"}}.get(result.get("stage"), {})
             reply = {"answers": answers, "accept_revised_idea": False}
             result = timed(phase_of, orchestrator.resume_run, run_id, reply)
             continue

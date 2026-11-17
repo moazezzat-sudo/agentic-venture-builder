@@ -46,6 +46,10 @@ def run_one(item: dict) -> dict:
     start = time.time()
     try:
         result = orchestrator.start_run(dict(item["brief"]), run_id)
+        # Discovery: no extra answers (the brief is all the founder says), then confirm the summary.
+        while result.get("awaiting_founder") and result.get("stage") in ("discovery", "discovery_confirm"):
+            answers = {"confirm": "Yes, that's my idea"} if result["stage"] == "discovery_confirm" else {}
+            result = orchestrator.resume_run(run_id, {"answers": answers})
         error = None
     except Exception as exc:  # report it; never hide a failed run
         result, error = {}, f"{type(exc).__name__}: {exc}"

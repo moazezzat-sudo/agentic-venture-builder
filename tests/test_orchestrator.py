@@ -22,6 +22,7 @@ import agents._common as common  # noqa: E402
 import guardrails  # noqa: E402
 import logger  # noqa: E402
 import orchestrator  # noqa: E402
+from agents import discovery  # noqa: E402
 import tools.credibility  # noqa: E402
 import tools.search  # noqa: E402
 import tools.worldbank  # noqa: E402
@@ -29,11 +30,24 @@ from config import Settings  # noqa: E402
 from logger import REQUIRED_KEYS  # noqa: E402
 from schemas import FounderDecision  # noqa: E402
 
+UNDERSTANDING = {
+    "customer": "Freelance designers in Cairo with foreign clients",
+    "problem": "Turning time logs into invoices takes hours and clients pay late",
+    "current_alternative": "Spreadsheets and invoice templates",
+    "why_now": "More Egyptian designers work for clients abroad",
+    "payment": "A monthly subscription paid by the designer",
+}
+KEYWORDS = {"customer": "freelance designers", "problem": "late client invoices", "solution": "invoice from time logs",
+            "activity": "invoicing", "arabic": []}
+# A brief that arrives with a confirmed understanding (a re-run) skips the discovery conversation.
+# Hashish's tests import FULL_BRIEF and expect start_run to reach Gate 1 directly.
 FULL_BRIEF = {
     "idea": "A web app that turns freelance designers' time logs into client invoices",
     "skills": ["python", "design"], "budget": "300 USD", "time_available": "15 hours a week",
     "location": "Cairo, Egypt", "target_market": "freelance designers with foreign clients", "has_team": False,
+    "confirmed_understanding": UNDERSTANDING, "keywords": KEYWORDS,
 }
+NEW_BRIEF = {k: v for k, v in FULL_BRIEF.items() if k not in ("confirmed_understanding", "keywords")}
 CRITERIA = ["problem_evidence", "market", "competition", "founder_fit", "feasibility", "willingness_to_pay", "rules_risk"]
 
 
@@ -59,6 +73,13 @@ class FakeModel:
         later = later_phase_reply(agent, self.calls.count(agent))
         if later is not None:
             return json.dumps(later), 100, 0.0, "fake-model"
+        sent = json.loads(user.split("\n\n")[0]) if user.strip().startswith("{") else {}
+        if agent == "discovery":
+            return json.dumps(discovery_reply(sent.get("round", 1))), 100, 0.0, "fake-model"
+        if agent == "evidence":
+            return json.dumps(evidence_reply(sent)), 100, 0.0, "fake-model"
+        if agent == "scorer":
+            return json.dumps(scorer_reply(sent, self.score)), 100, 0.0, "fake-model"
         reply = {
             "weigher": {"areas": [{"name": "invoicing pain", "weight": 2, "query": "freelancer invoicing problems"},
                                   {"name": "competitors", "weight": 1, "query": "freelance invoicing tools"}],
@@ -77,6 +98,41 @@ class FakeModel:
                           "interview_questions": ["When did you last send an invoice?"]},
         }[agent]
         return json.dumps(reply), 100, 0.0, "fake-model"
+
+
+def discovery_reply(round_no):
+    return {
+        "summary": "Here's what I understood: a web app for freelance designers in Cairo that turns time logs into invoices.",
+        "assumptions": [{"type": t, "text": v} for t, v in UNDERSTANDING.items()],
+        "keywords": KEYWORDS,
+        "questions": [{"text": "Which designers exactly: UI, graphic or motion?", "why": "Narrows the customer.",
+                       "suggestions": ["UI designers", "Graphic designers"]}] if round_no == 1 else [],
+    }
+
+
+EVIDENCE_TEXT = {
+    "pain": "Designers complain that clients pay invoices late",
+    "competitors": "InvoiceTool turns time logs into invoices for 10 USD a month",
+    "pricing": "Invoicing apps for freelancers cost 10 USD a month",
+    "regulation": "Invoices must follow the national tax rules",
+}
+
+
+def evidence_reply(sent):
+    text = EVIDENCE_TEXT.get(sent.get("evidence_type"), "A relevant result")
+    results = [{"i": r["i"], "relevant": True, "claim": text} for r in sent.get("results", [])]
+    if sent.get("evidence_type") == "pricing":  # a statement for a result that doesn't exist: must become ASSUMPTION
+        results.append({"i": 99, "relevant": True, "claim": "Made-up statistic"})
+    return {"results": results}
+
+
+def scorer_reply(sent, score):
+    """Scores every criterion at `score`, citing the claim ids of the matching evidence type from the payload."""
+    by_type = {t: [c["id"] for c in cs] for t, cs in (sent.get("claims_by_type") or {}).items()}
+    cite = {"problem_evidence": by_type.get("pain", []), "market": by_type.get("market", []),
+            "competition": by_type.get("competitors", []), "willingness_to_pay": by_type.get("pricing", []),
+            "founder_fit": [], "feasibility": []}
+    return {"criteria": {c: {"score": score, "claim_ids": ids[:3], "reasoning": "fake reasoning"} for c, ids in cite.items()}}
 
 
 def fake_search(query, max_results=3):
@@ -132,13 +188,61 @@ def test_banned_product_stops_before_research(run):
     assert "STOP" in (run["out"] / "phase1_gate_decision.md").read_text(encoding="utf-8")
 
 
-def test_intake_asks_only_missing_fields_then_continues(run):
-    r = orchestrator.start_run({"idea": FULL_BRIEF["idea"], "skills": ["python"]}, "intake")
-    assert r["awaiting_founder"] and r["kind"] == "questions"
-    fields = [q["field"] for q in r["questions"]]
-    assert "skills" not in fields and "location" in fields
-    r = orchestrator.resume_run("intake", {"answers": {"location": "Egypt", "has_team": "no"}})
+def answer_discovery(run_id, r, answers=None, confirm=True):
+    """Answer the discovery rounds, then confirm (or correct) the summary; returns the next pause."""
+    while r.get("kind") == "questions" and r.get("stage") == "discovery":
+        r = orchestrator.resume_run(run_id, {"answers": answers or {}})
+    assert r["stage"] == "discovery_confirm", r
+    choice = discovery.CONFIRM_YES if confirm else discovery.CONFIRM_NO
+    return orchestrator.resume_run(run_id, {"answers": {"confirm": choice, "correction": "" if confirm else "Only UI designers"}})
+
+
+def test_discovery_conversation_comes_before_research(run):
+    brief = {k: v for k, v in NEW_BRIEF.items() if k != "skills"}
+    r = orchestrator.start_run(brief, "disc")
+    assert r["kind"] == "questions" and r["stage"] == "discovery" and r["round"] == 1
+    assert r["summary"]["text"].startswith("Here's what I understood")
+    assert [a["type"] for a in r["summary"]["assumptions"]] == list(discovery.ASSUMPTION_TYPES)
+    for q in r["questions"]:
+        assert set(q) == {"id", "text", "why", "suggestions", "choices"}
+    ids = [q["id"] for q in r["questions"]]
+    assert "skills" in ids and "location" not in ids  # only missing founder fields are asked
+    assert "evidence" not in run["model"].calls  # no research before confirmation
+
+    r = orchestrator.resume_run("disc", {"answers": {ids[0]: "UI designers", "skills": "python, figma"}})
+    # Round 2: the fake model finds nothing vague, so it goes straight to the confirmation.
+    assert r["stage"] == "discovery_confirm"
+    assert [q["choices"] for q in r["questions"]][0] == [discovery.CONFIRM_YES, discovery.CONFIRM_NO]
+    r = orchestrator.resume_run("disc", {"answers": {"confirm": discovery.CONFIRM_NO, "correction": "Only UI designers"}})
+    assert r["stage"] == "discovery_confirm" and "evidence" not in run["model"].calls  # corrected, not confirmed
+    r = orchestrator.resume_run("disc", {"answers": {"confirm": discovery.CONFIRM_YES}})
     assert r["kind"] == "gate" and r["gate"] == "gate_1"
+    state = orchestrator.get_state("disc")
+    assert state["discovery"]["confirmed"] and state["brief"]["confirmed_understanding"]["customer"]
+    assert state["discovery"]["corrections"] == ["Only UI designers"]
+    assert state["brief"]["skills"] == ["python", "figma"]
+    text = (run["out"] / "phase1_step1_discovery.md").read_text(encoding="utf-8")
+    assert "Here's what I understood" in text and "Only UI designers" in text
+
+
+def test_discovery_has_at_most_two_question_rounds(run, monkeypatch):
+    model = run["model"]
+
+    def always_vague(agent, *args, **kwargs):
+        text, *rest = FakeModel.__call__(model, agent, *args, **kwargs)
+        if agent == "discovery":
+            data = json.loads(text)
+            data["questions"] = [{"text": "Still unclear: who pays?", "why": "", "suggestions": []}]
+            text = json.dumps(data)
+        return (text, *rest)
+
+    monkeypatch.setattr(common, "invoke_model", always_vague)
+    r = orchestrator.start_run(NEW_BRIEF, "vague")
+    rounds = []
+    while r["stage"] == "discovery":
+        rounds.append(r["round"])
+        r = orchestrator.resume_run("vague", {"answers": {}})
+    assert rounds == [1, 2] and r["stage"] == "discovery_confirm"
 
 
 TARGETS = {"answers": {"waitlist_target": "100", "waitlist_count": "120", "paid_orders": "10"}}
@@ -160,7 +264,13 @@ def test_strong_idea_goes_through_every_phase(run):
     r = orchestrator.resume_run("strong", TARGETS)
     seen = []
     while r["awaiting_founder"]:
+        if r["kind"] == "questions" and r["stage"] == "build_options":
+            assert r["questions"][0]["choices"] == orchestrator.BUILD_FORMATS
+            r = orchestrator.resume_run("strong", {"answers": {"product_format": orchestrator.BUILD_FORMATS[0],
+                                                               "must_include": "an invoice template"}})
+            continue
         assert r["kind"] == "gate", r
+        assert r["memo"]["verdict"] == r["recommendation"]
         seen.append((r["gate"], r["recommendation"]))
         if r["gate"] == "gate_6":  # MOCKED sales can't support persevere: repeat; the founder chooses go
             assert r["recommendation"] == "repeat"
@@ -174,7 +284,8 @@ def test_strong_idea_goes_through_every_phase(run):
     entries = log_entries(run)
     founder = [e for e in entries if e["action"].endswith("_founder_decision")]
     assert len(founder) == 8 and all(e["approved_by"] == "founder" for e in founder)
-    for name in ["phase1_step1_intake.md", "phase1_step3_areas.md", "phase1_step6_scores.md",
+    for name in ["phase1_step1_discovery.md", "phase1_step2_search_plan.md", "phase1_step3_research.md",
+                 "phase1_step6_scores.md",
                  "phase1_gate_decision.md", "phase1_step9_interview_kit.md", "phase2_step1_lean_canvas.md",
                  "phase2_gate_decision.md", "phase3_gate_plan_decision.md", "phase3_step2_landing.html",
                  "phase3_step4_user_docs.md", "phase3_gate_decision.md", "phase4_gate_decision.md",
@@ -237,16 +348,13 @@ def test_no_search_results_at_all_means_repeat_not_stop(run, monkeypatch):
 
 
 def test_search_that_works_but_finds_no_pain_still_stops(run, monkeypatch):
-    # Web search answers, but nothing it finds shows the pain: problem evidence 0 -> stop.
-    monkeypatch.setattr(tools.search, "search", lambda q, max_results=3: [
-        {"title": f"Unrelated page about {q}", "url": f"https://x{abs(hash(q)) % 99}.example.org/", "snippet": "",
-         "engine": "ddgs:duckduckgo"}])
+    # Web search answers, but the model judges nothing it finds to show the pain: problem evidence 0 -> stop.
     model = run["model"]
 
     def no_pain(agent, *args, **kwargs):
         text, *rest = FakeModel.__call__(model, agent, *args, **kwargs)
-        if agent == "researcher":
-            text = json.dumps({"claims": [{"text": "A tool exists", "source": 0, "criterion": "competition"}]})
+        if agent == "evidence" and '"evidence_type":"pain"' in args[1]:
+            text = json.dumps({"results": []})
         return (text, *rest)
 
     monkeypatch.setattr(common, "invoke_model", no_pain)
@@ -302,9 +410,9 @@ def test_interview_kit_on_go_repeat_pivot_not_on_stop(run):
 
 
 def test_founder_answer_violation_stops_with_violation_shown(run):
-    brief = {k: v for k, v in FULL_BRIEF.items() if k != "target_market"}
-    orchestrator.start_run(brief, "founder-text")
-    r = orchestrator.resume_run("founder-text", {"answers": {"target_market": "guaranteed income of 5000 a month"}})
+    brief = {k: v for k, v in NEW_BRIEF.items() if k != "target_market"}
+    r = orchestrator.start_run(brief, "founder-text")
+    r = answer_discovery("founder-text", r, {"target_market": "guaranteed income of 5000 a month"})
     assert r["recommendation"] == "stop"
     assert any("income_promise" in reason and "founder answer" in reason for reason in r["reasons"])
 
@@ -316,7 +424,7 @@ def test_draft_violation_recommends_repeat(run, monkeypatch):
         text, *rest = FakeModel.__call__(model, agent, *args, **kwargs)
         if agent == "scorer":
             data = json.loads(text)
-            data["reasons"]["feasibility"] = "You will earn $5000 per month"
+            data["criteria"]["feasibility"]["reasoning"] = "You will earn $5000 per month"
             text = json.dumps(data)
         return (text, *rest)
 
@@ -365,14 +473,57 @@ def test_regulation_and_market_claims_need_tier_a_or_b():
 def test_competition_zero_needs_a_sourced_competitor_claim():
     from agents.scorer import clean_scores
 
-    zero = {c: 3 for c in CRITERIA} | {"competition": 0}
-    scores, notes = clean_scores(zero, {}, [])
+    zero = {c: {"score": 3, "claim_ids": []} for c in CRITERIA if c != "rules_risk"} | {"competition": {"score": 0}}
+    scores, notes, _, _ = clean_scores(zero, [])
     assert scores["competition"] == 1 and "raised to 1" in notes["competition"]
-    claim = {"text": "Free tool X does this", "support": "url", "url": "https://x.example.com", "tier": "B", "area": "competition"}
-    assert clean_scores(zero, {}, [claim])[0]["competition"] == 0
+    claim = {"id": "C1", "kind": "competitors", "text": "Free tool X does this", "support": "url",
+             "url": "https://x.example.com", "tier": "B", "area": "competition"}
+    assert clean_scores(zero, [claim])[0]["competition"] == 0
     # Paid tools, or a free trial, are competition but not "a free tool already solves it".
     for text in ["Plutio converts time logs into invoices", "Tool Y offers a free trial, then 12 USD a month"]:
-        assert clean_scores(zero, {}, [{**claim, "text": text}])[0]["competition"] == 1
+        assert clean_scores(zero, [{**claim, "text": text}])[0]["competition"] == 1
+
+
+def test_scorer_must_cite_claims_of_the_right_type():
+    from agents.scorer import clean_scores
+
+    pain = {"id": "C1", "kind": "pain", "text": "Designers complain", "support": "url", "url": "https://a.org/x",
+            "tier": "B", "area": "problem_evidence"}
+    comp = {"id": "C2", "kind": "competitors", "text": "Tool Z exists", "support": "url", "url": "https://z.com",
+            "tier": "B", "area": "competition"}
+    raw = {"problem_evidence": {"score": 2, "claim_ids": ["C2"], "reasoning": "cites a competitor"},  # wrong type
+           "competition": {"score": 2, "claim_ids": ["C2", "C99"], "reasoning": "Z"},  # C99 doesn't exist
+           "market": {"score": 3, "claim_ids": [], "reasoning": "big"},
+           "founder_fit": {"score": 3, "claim_ids": [], "reasoning": "skills"},
+           "feasibility": {"score": 3, "claim_ids": [], "reasoning": "small"},
+           "willingness_to_pay": {"score": 2, "claim_ids": ["C2"], "reasoning": "no price stated"}}
+    scores, notes, cited, incomplete = clean_scores(raw, [pain, comp])
+    assert scores["problem_evidence"] == 1 and notes["problem_evidence"].startswith("no evidence")
+    assert scores["competition"] == 2 and cited["competition"] == ["C2"]
+    assert scores["market"] == 1 and scores["willingness_to_pay"] == 1  # nothing of the right type cited
+    assert scores["rules_risk"] == 4 and incomplete == []  # rules and risk is set in Python
+
+
+def test_missing_criteria_mean_incomplete_scoring_and_repeat(run, monkeypatch):
+    from agents.scorer import clean_scores
+
+    _, _, _, incomplete = clean_scores({"problem_evidence": {"score": 2, "claim_ids": []}}, [])
+    assert incomplete == ["market", "competition", "founder_fit", "feasibility", "willingness_to_pay"]
+
+    model = run["model"]
+
+    def partial(agent, *args, **kwargs):
+        text, *rest = FakeModel.__call__(model, agent, *args, **kwargs)
+        if agent == "scorer":
+            data = json.loads(text)
+            del data["criteria"]["market"]
+            text = json.dumps(data)
+        return (text, *rest)
+
+    monkeypatch.setattr(common, "invoke_model", partial)
+    r = orchestrator.start_run(FULL_BRIEF, "incomplete")
+    assert r["recommendation"] == "repeat" and "Scoring incomplete" in r["reasons"][0]
+    assert "market" not in orchestrator.get_state("incomplete")["scores"]  # never turned into a 0
 
 
 def test_world_bank_figures_become_tier_a_market_claims(run):
@@ -502,7 +653,7 @@ def test_search_outage_gives_repeat_not_stop(run, monkeypatch):
     r = orchestrator.start_run(FULL_BRIEF, "outage")
     assert r["recommendation"] == "repeat"
     assert any("could not be gathered" in reason for reason in r["reasons"])
-    entries = [e for e in log_entries(run) if e["agent"] == "researcher"]
+    entries = [e for e in log_entries(run) if e["action"] == "judge_relevance"]
     assert entries and all(e["web_search_ok"] is False for e in entries)
 
 
@@ -529,7 +680,9 @@ def test_skeptic_skips_restating_the_idea():
 def test_scores_file_lists_the_claims_the_reasons_cite(run):
     orchestrator.start_run(FULL_BRIEF, "numbering")
     text = (run["out"] / "phase1_step6_scores.md").read_text(encoding="utf-8")
-    assert "## Claims the scorer saw" in text and "\n0. " in text
+    assert "## Claims" in text and "[C1 · " in text and "| Claims |" in text
+    research = (run["out"] / "phase1_step3_research.md").read_text(encoding="utf-8")
+    assert "| pain |" in research and "[C" in research
 
 
 class FlakyModel(FakeModel):
@@ -549,14 +702,14 @@ class FlakyModel(FakeModel):
 
 
 def test_broken_json_is_retried_once(run, monkeypatch):
-    model = FlakyModel(broken={"weigher", "scorer"})
+    model = FlakyModel(broken={"skeptic", "scorer"})
     monkeypatch.setattr(common, "invoke_model", model)
     r = orchestrator.start_run(FULL_BRIEF, "retry")
     assert r["recommendation"] == "go"
-    assert model.calls.count("weigher") == 2 and model.calls.count("scorer") == 2
+    assert model.calls.count("skeptic") == 2 and model.calls.count("scorer") == 2
     entries = {e["action"]: e for e in log_entries(run)}
-    assert entries["split_areas"]["parsed"] is True and entries["split_areas"]["retried"] is True
-    assert entries["split_areas"]["tokens"] == 200  # both calls are counted
+    assert entries["check_founder_claims"]["parsed"] is True and entries["check_founder_claims"]["retried"] is True
+    assert entries["check_founder_claims"]["tokens"] == 200  # both calls are counted
 
 
 def test_json_failing_twice_falls_back_safely(run, monkeypatch):
@@ -564,16 +717,19 @@ def test_json_failing_twice_falls_back_safely(run, monkeypatch):
     r = orchestrator.start_run(FULL_BRIEF, "no-json")
     scored = [e for e in log_entries(run) if e["action"].startswith("score_rubric")][0]
     assert scored["parsed"] is False and scored["retried"] is True
-    assert r["recommendation"] == "stop"  # every score falls back to 0, with the reason said
-    assert "the model gave no valid score" in (run["out"] / "phase1_step6_scores.md").read_text(encoding="utf-8")
+    # No scores at all: scoring incomplete -> repeat (never a 0 for what the model did not return).
+    assert r["recommendation"] == "repeat" and "Scoring incomplete" in r["reasons"][0]
+    assert "**missing**" in (run["out"] / "phase1_step6_scores.md").read_text(encoding="utf-8")
 
 
 def test_deterministic_steps_run_at_temperature_zero(run):
-    orchestrator.start_run(FULL_BRIEF, "temperature")
-    for agent in ("weigher", "researcher", "skeptic", "scorer"):
+    orchestrator.start_run(NEW_BRIEF, "temperature")
+    orchestrator.resume_run("temperature", {"answers": {}})
+    orchestrator.resume_run("temperature", {"answers": {"confirm": discovery.CONFIRM_YES}})
+    for agent in ("discovery", "evidence", "skeptic", "scorer"):
         assert run["model"].kwargs[agent]["temperature"] == 0, agent
-    assert run["model"].kwargs["weigher"]["role"] == "fast"
-    assert all(k["max_tokens"] <= 700 for k in run["model"].kwargs.values())
+    assert run["model"].kwargs["evidence"]["role"] == "fast" and run["model"].kwargs["discovery"]["role"] == "fast"
+    assert all(k["max_tokens"] <= 900 for k in run["model"].kwargs.values())
 
 
 def test_local_model_gets_json_mode_and_a_token_cap(monkeypatch):
@@ -588,16 +744,62 @@ def test_local_model_gets_json_mode_and_a_token_cap(monkeypatch):
         assert client.reasoning == think
 
 
-def test_each_area_searches_a_forum(run, monkeypatch):
-    queries = []
-    monkeypatch.setattr(tools.search, "search", lambda q, max_results=3: queries.append(q) or fake_search(q, max_results))
-    orchestrator.start_run(FULL_BRIEF, "forums")
-    state = orchestrator.get_state("forums")
-    forum = [a["forum_query"] for a in state["areas"]]
-    assert forum[0].endswith("site:reddit.com") and forum[1].endswith("site:news.ycombinator.com")
-    assert all(q in queries for q in forum)
-    research_file = next(run["out"].glob("phase1_step4_research_*.md")).read_text(encoding="utf-8")
-    assert "(forum)" in research_file and "Forum query:" in research_file
+def test_search_plan_per_evidence_type():
+    from agents.search_plan import MAX_QUERIES, build_search_plan
+
+    plan = build_search_plan({"brief": FULL_BRIEF})
+    types = [p["evidence_type"] for p in plan]
+    assert {"pain", "competitors", "pricing", "market"} <= set(types) and len(plan) <= MAX_QUERIES
+    queries = {p["evidence_type"]: [x["query"] for x in plan if x["evidence_type"] == p["evidence_type"]] for p in plan}
+    assert any(q.endswith("site:reddit.com") for q in queries["pain"])
+    assert any(q.endswith("site:play.google.com") for q in queries["competitors"])
+    assert any("price" in q and "Egypt" in q for q in queries["pricing"])
+    assert all(p["why"] for p in plan)
+    assert "regulation" in types  # invoicing touches tax rules: a regulated area
+    habit = {"idea": "A habit tracker for novelists", "location": "Cairo, Egypt",
+             "keywords": {"customer": "novelists", "problem": "writing habit", "solution": "habit tracker",
+                          "activity": "writing"}}
+    assert "regulation" not in [p["evidence_type"] for p in build_search_plan({"brief": habit})]
+    football = {**FULL_BRIEF, "idea": "An app that films amateur football matches on a phone",
+                "keywords": {**KEYWORDS, "activity": "video recording", "arabic": ["تصوير مباريات", "كرة قدم"]}}
+    plan = build_search_plan({"brief": football})
+    assert any(p["evidence_type"] == "regulation" and p["query"].endswith("site:gov.eg") for p in plan)
+    assert any(p["query"] == "تصوير مباريات كرة قدم" for p in plan)  # Arabic keywords for Egypt
+
+
+def test_research_keeps_relevant_results_and_logs_the_rest(run, monkeypatch):
+    def search(q, max_results=3):
+        site = re.search(r"site:(\S+)", q)
+        if site:
+            return [{"title": f"{q} thread", "url": f"https://{site.group(1)}/r/x/comments/{abs(hash(q)) % 97}/t/",
+                     "snippet": "", "engine": "ddgs:duckduckgo"}]
+        return [{"title": "Freelance designers late client invoices", "url": "https://a.example.org/1", "snippet": "",
+                 "engine": "ddgs:duckduckgo"},
+                {"title": "Celebrity gossip", "url": "https://b.example.org/2", "snippet": "", "engine": "ddgs:duckduckgo"}]
+
+    monkeypatch.setattr(tools.search, "search", search)
+    orchestrator.start_run(FULL_BRIEF, "relevance")
+    state = orchestrator.get_state("relevance")
+    assert [p["evidence_type"] for p in state["search_plan"]][:3] == ["pain", "pain", "pain"]
+    kinds = {c.get("kind") for c in state["claims"]}
+    assert {"pain", "competitors", "pricing", "market"} <= kinds
+    assert all(c["id"].startswith("C") for c in state["claims"])
+    assert len({c["id"] for c in state["claims"]}) == len(state["claims"])  # unique ids across parallel researchers
+    queries = [e for e in log_entries(run) if e["action"] == "search_query"]
+    dropped = [d for e in queries for d in e["dropped"]]
+    assert any("keyword score" in d["reason"] and "b.example.org" in d["url"] for d in dropped)
+
+
+def test_research_counts_a_source_once(run, monkeypatch):
+    from agents import researcher
+
+    monkeypatch.setattr(tools.search, "search", lambda q, max_results=3: [
+        {"title": "Invoice from time logs app", "url": "https://tool.example.com/", "snippet": "", "engine": "ddgs:yahoo"}])
+    out = researcher.evidence_node({"evidence_type": "competitors", "brief": FULL_BRIEF, "round": 1, "run_id": "dedupe",
+                                    "items": [{"query": "invoice from time logs app"}, {"query": "invoice time logs tool"}]})
+    assert len(out["claims"]) == 1 and out["claims"][0]["kind"] == "competitors"
+    queries = [e for e in log_entries(run) if e["action"] == "search_query"]
+    assert [d["reason"] for e in queries for d in e["dropped"]] == ["same source already kept"]
 
 
 def test_every_log_entry_has_the_run_id(run):
@@ -672,3 +874,40 @@ def test_model_cannot_invent_sources(run, monkeypatch):
     assert invented and all(c["support"] == "ASSUMPTION" and c["url"] is None for c in invented)
     # Market stays capped at 1 without a tier A/B market source.
     assert state["scores"]["market"] <= 1
+
+
+
+
+def test_gate_payload_carries_the_evaluation_memo(run):
+    r = orchestrator.start_run(FULL_BRIEF, "memo")
+    memo = r["memo"]
+    assert {"verdict", "headline", "why", "per_criterion", "unknowns", "next_steps"} <= set(memo)
+    assert memo["verdict"] == r["recommendation"] and memo["source"] == "fallback"
+    ids = {c["id"] for c in orchestrator.get_state("memo")["claims"]}
+    cited = [i for p in memo["per_criterion"] for i in p["claim_ids"]]
+    assert cited and set(cited) <= ids
+    assert "## Evaluation memo" in (run["out"] / "phase1_gate_decision.md").read_text(encoding="utf-8")
+
+
+def test_coach_asks_about_the_missing_evidence_types(run):
+    run["model"].score = 1
+    r = orchestrator.start_run(FULL_BRIEF, "coach-gaps")
+    r = orchestrator.resume_run("coach-gaps", decide(r, "repeat", approved=False))
+    assert r["stage"] == "coach" and set(r["missing_evidence_types"]) >= {"pain", "pricing"}
+    ids = [q["id"] for q in r["questions"]]
+    assert "coach_pain" in ids and "coach_pricing" in ids
+    assert all(set(q) == {"id", "text", "why", "suggestions", "choices"} for q in r["questions"])
+
+
+def test_request_changes_reruns_the_phase_with_the_note(run):
+    to_phase_2("changes")
+    r = orchestrator.resume_run("changes", TARGETS)
+    r = orchestrator.resume_run("changes", decide(r, "go"))  # gate_2
+    assert r["gate"] == "gate_3_plan"
+    r = orchestrator.resume_run("changes", FounderDecision(phase=3, gate="gate_3_plan", approved=False, outcome="repeat",
+                                                           note="Use SQLite only, no cloud database"))
+    assert r["gate"] == "gate_3_plan"  # the plan was redrafted
+    assert run["model"].calls.count("phase3_build_plan") == 2
+    assert orchestrator.get_state("changes")["brief"]["change_request"] == "Use SQLite only, no cloud database"
+    r = orchestrator.resume_run("changes", decide(r, "go"))
+    assert r["stage"] == "build_options"  # the founder chooses the format before anything is built
