@@ -53,7 +53,7 @@ The system runs six phases in order: Discover, Validate, Build, Commercial setup
 
 ## Cost per run
 
-$0.00 in API charges per run with local Ollama or Groq's free tier. The figure excludes hardware, electricity and internet. The committed Groq demo used 7,171 tokens over 11 model calls and recommended STOP at Gate 1 with zero independent pain sources. The historical six-phase Groq test used 20,915 tokens with scripted founder overrides and STUBBED drafts. See the [committed gate decision](outputs/phase1_gate_decision.md) and [evaluation results](evals/briefs/RESULTS.md).
+$0.00 in API charges per run with local Ollama or Groq's free tier. The figure excludes hardware, electricity and internet. The committed weak-idea demo (`W1` → **STOP** at Gate 1, approved by the founder) used 10,005 tokens, and the committed six-phase pipeline run (`S1` through Phase 6, with scripted founder overrides and STUBBED drafts) used 26,128 tokens. See the [committed gate decision](outputs/phase1_gate_decision.md) and [evaluation results](evals/briefs/RESULTS.md).
 
 ## Demo video
 

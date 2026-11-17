@@ -4,17 +4,17 @@ Everything below is the founder's own statement, as understood and confirmed. It
 
 ## Here's what I understood
 
-The founder proposes a website that converts PDF files to Word documents. The target users are university students in Egypt. The founder has no team, a budget of 100 USD, and can work 10 hours a week. Payment terms are not stated.
+A simple web service that lets university students in Egypt upload a PDF and receive a Word document in return.
 
 ## Key assumptions (all ASSUMPTION until research)
 
 | | |
 |---|---|
-| Customer | University students in Egypt |
-| Problem | They need to convert PDFs to Word documents |
-| What they use now | Unclear: not stated yet. |
-| Why now | Unclear: not stated yet. |
-| How they'd pay | Unclear: not stated yet. |
+| Customer | university students in Egypt |
+| Problem | difficulty converting PDFs to editable Word files |
+| What they use now | using desktop software or manual copy‑paste |
+| Why now | increased online learning and remote assignments |
+| How they'd pay | students pay per conversion or a subscription |
 
 ## Questions and answers (3 round(s))
 
@@ -26,6 +26,6 @@ _None._
 
 ## Search keywords
 
-customer: university students, problem: PDF to Word conversion, solution: website converter, activity: document conversion
+customer: university students, problem: PDF to Word conversion, solution: online converter, activity: file upload
 
-Arabic: none
+Arabic: تحويل PDF إلى Word, موقع تحويل PDF, مستندات Word

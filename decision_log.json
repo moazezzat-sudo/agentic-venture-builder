@@ -1,174 +1,162 @@
 [
   {
-    "timestamp": "2026-11-17T20:55:27Z",
+    "timestamp": "2026-11-17T21:53:58Z",
     "agent": "orchestrator",
     "action": "start_run",
     "sources": [],
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b"
+    "run_id": "demo-full-S1"
   },
   {
-    "timestamp": "2026-11-17T20:55:30Z",
+    "timestamp": "2026-11-17T21:53:59Z",
     "agent": "guardrails",
     "action": "category_check_model",
     "sources": [],
     "model": "openai/gpt-oss-20b",
     "cost": 0.0,
     "approved_by": null,
-    "tokens": 471,
+    "tokens": 428,
     "outcome": "allowed"
   },
   {
-    "timestamp": "2026-11-17T20:55:30Z",
+    "timestamp": "2026-11-17T21:53:59Z",
     "agent": "guardrails",
     "action": "category_check",
     "sources": [],
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "allowed": true,
     "category": "allowed",
     "stubbed": false
   },
   {
-    "timestamp": "2026-11-17T20:55:31Z",
+    "timestamp": "2026-11-17T21:54:00Z",
     "agent": "discovery",
     "action": "discovery_round_1",
     "sources": [],
-    "model": "agents.questions",
+    "model": "openai/gpt-oss-20b",
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "source": "agents.questions",
-    "questions": 4,
-    "unclear": [
-      "current_alternative",
-      "why_now",
-      "payment"
-    ],
+    "run_id": "demo-full-S1",
+    "source": "fallback",
+    "questions": 3,
+    "unclear": [],
     "missing_fields": [],
     "raw_reply": null,
-    "tokens": 0,
+    "tokens": 1196,
     "parsed": true,
     "retried": false
   },
   {
-    "timestamp": "2026-11-17T20:55:31Z",
+    "timestamp": "2026-11-17T21:54:00Z",
     "agent": "discovery",
     "action": "discovery_answers_round_1",
     "sources": [],
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "answered": [],
     "guardrail_violations": []
   },
   {
-    "timestamp": "2026-11-17T20:55:32Z",
+    "timestamp": "2026-11-17T21:54:01Z",
     "agent": "discovery",
     "action": "discovery_round_2",
     "sources": [],
-    "model": "agents.questions",
+    "model": "openai/gpt-oss-20b",
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "source": "agents.questions",
-    "questions": 4,
-    "unclear": [
-      "current_alternative",
-      "why_now",
-      "payment"
-    ],
+    "run_id": "demo-full-S1",
+    "source": "fallback",
+    "questions": 3,
+    "unclear": [],
     "missing_fields": [],
     "raw_reply": null,
-    "tokens": 0,
+    "tokens": 1397,
     "parsed": true,
     "retried": false
   },
   {
-    "timestamp": "2026-11-17T20:55:32Z",
+    "timestamp": "2026-11-17T21:54:01Z",
     "agent": "discovery",
     "action": "discovery_answers_round_2",
     "sources": [],
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "answered": [],
     "guardrail_violations": []
   },
   {
-    "timestamp": "2026-11-17T20:55:32Z",
+    "timestamp": "2026-11-17T21:54:02Z",
     "agent": "discovery",
     "action": "discovery_round_3",
     "sources": [],
-    "model": "agents.questions",
+    "model": "openai/gpt-oss-20b",
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "source": "agents.questions",
+    "run_id": "demo-full-S1",
+    "source": "fallback",
     "questions": 0,
-    "unclear": [
-      "current_alternative",
-      "why_now",
-      "payment"
-    ],
+    "unclear": [],
     "missing_fields": [],
     "raw_reply": null,
-    "tokens": 0,
+    "tokens": 1135,
     "parsed": true,
     "retried": false
   },
   {
-    "timestamp": "2026-11-17T20:55:32Z",
+    "timestamp": "2026-11-17T21:54:02Z",
     "agent": "discovery",
     "action": "discovery_confirmed",
     "sources": [],
     "model": null,
     "cost": 0.0,
     "approved_by": "founder",
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "rounds": 3
   },
   {
-    "timestamp": "2026-11-17T20:55:33Z",
+    "timestamp": "2026-11-17T21:54:04Z",
     "agent": "guardrails",
     "action": "category_check_model",
     "sources": [],
     "model": "openai/gpt-oss-20b",
     "cost": 0.0,
     "approved_by": null,
-    "tokens": 540,
+    "tokens": 571,
     "outcome": "allowed"
   },
   {
-    "timestamp": "2026-11-17T20:55:33Z",
+    "timestamp": "2026-11-17T21:54:04Z",
     "agent": "guardrails",
     "action": "category_check",
     "sources": [],
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "allowed": true,
     "category": "allowed",
     "stubbed": false
   },
   {
-    "timestamp": "2026-11-17T20:55:33Z",
+    "timestamp": "2026-11-17T21:54:04Z",
     "agent": "search_plan",
     "action": "build_search_plan",
     "sources": [],
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "round": 1,
-    "queries": 8,
+    "queries": 9,
     "evidence_types": [
       "competitors",
       "market",
@@ -178,7 +166,7 @@
     ]
   },
   {
-    "timestamp": "2026-11-17T20:55:33Z",
+    "timestamp": "2026-11-17T21:54:04Z",
     "agent": "researcher",
     "action": "market_indicators",
     "sources": [
@@ -188,345 +176,382 @@
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "round": 1,
     "evidence_type": "market"
   },
   {
-    "timestamp": "2026-11-17T20:55:33Z",
+    "timestamp": "2026-11-17T21:54:05Z",
     "agent": "researcher",
     "action": "search_query",
-    "sources": [],
+    "sources": [
+      "https://www.supersaas.com/"
+    ],
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "round": 1,
     "evidence_type": "pricing",
-    "query": "website converter price Egypt",
-    "kept": 0,
+    "query": "SaaS scheduling price Egypt",
+    "kept": 1,
     "dropped": [
       {
-        "url": "https://en.wikipedia.org/wiki/Rosetta_%28disambiguation%29",
-        "reason": "keyword score 0: shares no word with the query"
+        "url": "https://www.f6s.com/companies/saas/egypt/co",
+        "reason": "the model judged it not relevant"
       },
       {
-        "url": "https://en.wikipedia.org/wiki/Oshkosh_M1070",
-        "reason": "keyword score 0: shares no word with the query"
-      },
-      {
-        "url": "https://en.wikipedia.org/wiki/Foreign_exchange_market",
-        "reason": "keyword score 0: shares no word with the query"
-      }
-    ]
-  },
-  {
-    "timestamp": "2026-11-17T20:55:33Z",
-    "agent": "researcher",
-    "action": "judge_relevance",
-    "sources": [],
-    "model": null,
-    "cost": 0.0,
-    "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "round": 1,
-    "evidence_type": "pricing",
-    "candidates": 0,
-    "kept": 0,
-    "web_search_ok": false,
-    "tokens": 0,
-    "parsed": null,
-    "retried": false
-  },
-  {
-    "timestamp": "2026-11-17T20:55:37Z",
-    "agent": "researcher",
-    "action": "search_query",
-    "sources": [],
-    "model": null,
-    "cost": 0.0,
-    "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "round": 1,
-    "evidence_type": "pain",
-    "query": "university students PDF Word conversion Egypt",
-    "kept": 0,
-    "dropped": [
-      {
-        "url": "https://en.wikipedia.org/wiki/Copts",
-        "reason": "keyword score 0: shares no word with the query"
-      },
-      {
-        "url": "https://en.wikipedia.org/wiki/Israel",
-        "reason": "keyword score 0: shares no word with the query"
-      },
-      {
-        "url": "https://en.wikipedia.org/wiki/Religious_conversion",
+        "url": "https://data.stateglobe.com/egypt/saas-pricing-trends-statistics",
         "reason": "the model judged it not relevant"
       }
     ]
   },
   {
-    "timestamp": "2026-11-17T20:55:37Z",
-    "agent": "researcher",
-    "action": "search_query",
-    "sources": [],
-    "model": null,
-    "cost": 0.0,
-    "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "round": 1,
-    "evidence_type": "pain",
-    "query": "PDF to Word conversion site:reddit.com",
-    "kept": 0,
-    "dropped": [
-      {
-        "url": "https://www.bing.com/aclick?ld=e8sVJAW1eAtx46yyrdU3nohzVUCUyNaRnRSpcB29wgtXIpXcS4h4A8o7_VxmnPr0ijxWn-RX4C19iQwUio4q2gvxrIS6zTCpWUN-OmJAuQdGURkwmpCzaA9PdjCEs8nfceRh3btV-FwCj8gPVv2yQ2s01ZpqCckGYSGiG3UvCqW7CCjA4dQXAUbh0kE0JjKUQiPRbqOFSlM8L1AW6-8-cBvrZOTdw&u=aHR0cHMlM2ElMmYlMmZwaXhlbC5ldmVyZXN0dGVjaC5uZXQlMmYzMDg1JTJmY3ElM2Zldl9zaWQlM2QxMCUyNmV2X2xuJTNkcGRmJTI1MjB0byUyNTIwd29yZCUyNTIwY29udmVyc2lvbiUyNmV2X2x0eCUzZCUyNmV2X2x4JTNka3dkLTc5NzgzODU0NTcxMTcyJTNhbG9jLTE4NyUyNmV2X2NyeCUzZDc5NzgzNDg4MzM1MzI2JTI2ZXZfbXQlM2RlJTI2ZXZfZHZjJTNkYyUyNmV2X3BoeSUzZDE1NDUyMiUyNmV2X2xvYyUzZCUyNmV2X2N4JTNkNDAyNDUyMzE2JTI2ZXZfYXglM2QxMjc2NTMzODEyNzYyMDk1JTI2ZXZfZXglM2QlMjZldl9lZmlkJTNkMGIwM2EyYTcxMTExMTQwNjgxYWNjODViYWUzMjI3NDElM2FHJTNhcyUyNnVybCUzZGh0dHBzJTI1M0ElMjUyRiUyNTJGYWNyb2JhdC5hZG9iZS5jb20lMjUyRnRvb2xzJTI1MkZwZGYtdG8td29yZCUyNTNGc2RpZCUyNTNESkNOQ1dGWEYlMjUyNm12JTI1M0RzZWFyY2glMjUyNm12MiUyNTNEcGFpZHNlYXJjaCUyNTI2ZWZfaWQlMjUzRDBiMDNhMmE3MTExMTE0MDY4MWFjYzg1YmFlMzIyNzQxJTI1M0FHJTI1M0FzJTI1MjZzX2t3Y2lkJTI1M0RBTCEzMDg1ITEwITc5NzgzNDg4MzM1MzI2ISEhITc5NzgzODU0NTcxMTcyISE0MDI0NTIzMTYhMTI3NjUzMzgxMjc2MjA5NSUyNTI2bXYlMjUzRHNlYXJjaCUyNm12JTNkc2VhcmNoJTI2bXYyJTNkcGFpZHNlYXJjaCUyNm1zY2xraWQlM2QwYjAzYTJhNzExMTExNDA2ODFhY2M4NWJhZTMyMjc0MQ&rlid=0b03a2a71111140681acc85bae322741",
-        "reason": "advert or redirect link"
-      },
-      {
-        "url": "https://www.bing.com/aclick?ld=e8QuS-TntTCkanHlPoLajS9DVUCUy5rNvRCQydxsqCXiht-ojuiAmvZAlbkXALovtYAIICH5kWE8pd8FVszVO2Z_0pAmSNnQE7MXxP5keLANNiYr-Aszab97ThT4lt-occqzdC17CPZgsb-gGbrcvPB7-lKRYBRN-AD9OanzCsaeioRYoUbuHeF9OxKyb7wmaTWrxmwapgu6_nsIe6Gx1ezrr9_w0&u=aHR0cHMlM2ElMmYlMmZjb252ZXJ0Mi5pbmZvJTJmdG9vbHMlMmZwZGYtdG8tZG9jeCUzZmNhbXBhaWduX2lkJTNkNTI1MTQwNzk4JTI2YWRncm91cF9pZCUzZDEzMjM4MTUwOTQ3OTgyMTglMjZwbGFjZW1lbnRfaWQlM2QlMjZjcmVhdGl2ZV9pZCUzZCUyNmtleXdvcmQlM2RBSSUyNTIwT3B0aW1pemVkJTI2a2V5d29yZF90eXBlJTNkYiUyNmFkX3Bvc2l0aW9uJTNkJTI2YWRfaXRlbSUzZCUyNnNvdXJjZSUzZGJpbmclMjZnY2xpZCUzZDIyMGNjYmIwNDkzYzEwZGZiMDllYTE0Y2Y2MWY1NzBmJTI2bXNjbGtpZCUzZDIyMGNjYmIwNDkzYzEwZGZiMDllYTE0Y2Y2MWY1NzBm&rlid=220ccbb0493c10dfb09ea14cf61f570f",
-        "reason": "advert or redirect link"
-      },
-      {
-        "url": "https://www.bing.com/aclick?ld=e8km_NIKGnf2lY6z153pEwLDVUCUzpMyfuo0RTQC8ja73QwOYX3uMdCwCkh6DXPoP4PaR2DFM4-r5ybGw1v1VZhT4Pq5iSdHVRjUZOfJe2HalG8D-XROLXWddEGVdOXH7H8bcxQ82N9kWEy8xZo3Cmgcpd60_M3ekZsuv7ra84KxcZrsoLKeBEvmMN1DIAN0Bbh_0B2g806fNhZ_9BbEtehCDvNQU&u=aHR0cHMlM2ElMmYlMmZ6ZW5kb2NzLmNvbSUyZnBkZi10by13b3JkJTNmaWQlM2Q3NDhmMzcwOGU0ZGRlNzIxMjcwYmNkMjdmNzgyYzM1N2NjN2FkYTQwZDg4YTU4ZmI2NGIyZGFkMWVjMjNhMWUzJTI2dXRtX3NvdXJjZSUzZGJpbmclMjZ1dG1fbWVkaXVtJTNkY3BjJTI2dXRtX2NhbXBhaWduJTNkQVJfQVJfUERGX0FsbF9TZXJ2aWNlcyUyNnV0bV9jYW1wYWlnbl9pZCUzZDUyNTE4NTE4NiUyNnV0bV9hZGdyb3VwJTNkQVJfRU5fUERGX1dvcmRfUjIlMjZ1dG1fYWRncm91cF9pZCUzZDEzMjQ5MTQ2MDgwNzAwNTklMjZ1dG1fdGVybSUzZHBkZiUyNTIwdG8lMjUyMHdvcmQlMjUyMGNvbnZlcnNpb24lMjZ1dG1fY29udGVudCUzZCUyNnV0bV9mdW5uZWwlM2QlMjZwYXJ0bmVyJTNkV00lMjZ1cmwlM2RodHRwcyUyNTNBJTI1MkYlMjUyRnplbmRvY3MuY29tJTI1MkZwZGYtdG8td29yZCUyNm1zY2xraWQlM2Q2YjNiMGFkMTc1NmMxNTdiZWRiZTYwMmRjYTRmOTRiZA&rlid=6b3b0ad1756c157bedbe602dca4f94bd",
-        "reason": "advert or redirect link"
-      }
-    ]
-  },
-  {
-    "timestamp": "2026-11-17T20:55:37Z",
-    "agent": "researcher",
-    "action": "search_query",
-    "sources": [],
-    "model": null,
-    "cost": 0.0,
-    "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "round": 1,
-    "evidence_type": "pain",
-    "query": "university students PDF to Word conversion site:news.ycombinator.com",
-    "kept": 0,
-    "dropped": [
-      {
-        "url": "https://www.bing.com/aclick?ld=e8cYYG7MeKpUk7M3zN6dHYejVUCUzH6ozOoEa0dxyCY7StgNuIOO0Sd4494tJmdUiZotTtaHHeUptVrnZAfUUBXH8PMgAckdBImA6KKNRkePmAJ1WCAcBehROM1J7hH1acdN6W5ObTqyO6hIAX2mCiGpVqmEka4ZgoIUg1Svt2iI-vlQgsPa_iu9PktLU_JXsgyn8sPt4AdaMAK2JBEmpJWCtPq-s&u=aHR0cHMlM2ElMmYlMmZwaXhlbC5ldmVyZXN0dGVjaC5uZXQlMmYzMDg1JTJmY3ElM2Zldl9zaWQlM2QxMCUyNmV2X2xuJTNkY29udmVydCUyNTIwcGRmJTI1MjB0byUyNTIwd29yZCUyNTIwZG9jJTI2ZXZfbHR4JTNkJTI2ZXZfbHglM2Rrd2QtNzk3ODM4NTQ1NzExMzclM2Fsb2MtMTg3JTI2ZXZfY3J4JTNkNzk3ODM0ODgzMzUzMjYlMjZldl9tdCUzZGUlMjZldl9kdmMlM2RjJTI2ZXZfcGh5JTNkMTU0NTIyJTI2ZXZfbG9jJTNkJTI2ZXZfY3glM2Q0MDI0NTIzMTYlMjZldl9heCUzZDEyNzY1MzM4MTI3NjIwOTUlMjZldl9leCUzZCUyNmV2X2VmaWQlM2QxYjdlMzY4YzlmODMxOWIzYjAwYjVjNzAyMGE2NjI5ZCUzYUclM2FzJTI2dXJsJTNkaHR0cHMlMjUzQSUyNTJGJTI1MkZhY3JvYmF0LmFkb2JlLmNvbSUyNTJGdG9vbHMlMjUyRnBkZi10by13b3JkJTI1M0ZzZGlkJTI1M0RKQ05DV0ZYRiUyNTI2bXYlMjUzRHNlYXJjaCUyNTI2bXYyJTI1M0RwYWlkc2VhcmNoJTI1MjZlZl9pZCUyNTNEMWI3ZTM2OGM5ZjgzMTliM2IwMGI1YzcwMjBhNjYyOWQlMjUzQUclMjUzQXMlMjUyNnNfa3djaWQlMjUzREFMITMwODUhMTAhNzk3ODM0ODgzMzUzMjYhISEhNzk3ODM4NTQ1NzExMzchITQwMjQ1MjMxNiExMjc2NTMzODEyNzYyMDk1JTI1MjZtdiUyNTNEc2VhcmNoJTI2bXYlM2RzZWFyY2glMjZtdjIlM2RwYWlkc2VhcmNoJTI2bXNjbGtpZCUzZDFiN2UzNjhjOWY4MzE5YjNiMDBiNWM3MDIwYTY2Mjlk&rlid=1b7e368c9f8319b3b00b5c7020a6629d",
-        "reason": "advert or redirect link"
-      },
-      {
-        "url": "https://news.ycombinator.com/user?id=aaditsingal7859",
-        "reason": "keyword score 0: shares no word with the query"
-      },
-      {
-        "url": "https://news.ycombinator.com/item?id=41549649",
-        "reason": "keyword score 0: shares no word with the query"
-      }
-    ]
-  },
-  {
-    "timestamp": "2026-11-17T20:55:37Z",
+    "timestamp": "2026-11-17T21:54:05Z",
     "agent": "researcher",
     "action": "judge_relevance",
-    "sources": [],
+    "sources": [
+      "https://www.supersaas.com/"
+    ],
     "model": "openai/gpt-oss-20b",
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "round": 1,
-    "evidence_type": "pain",
-    "candidates": 1,
-    "kept": 0,
+    "evidence_type": "pricing",
+    "candidates": 3,
+    "kept": 1,
     "web_search_ok": true,
-    "tokens": 611,
+    "tokens": 856,
     "parsed": true,
     "retried": false
   },
   {
-    "timestamp": "2026-11-17T20:55:42Z",
+    "timestamp": "2026-11-17T21:54:12Z",
     "agent": "researcher",
     "action": "search_query",
     "sources": [],
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "round": 1,
     "evidence_type": "competitors",
-    "query": "website converter app Egypt",
+    "query": "SaaS scheduling app Cairo Egypt",
     "kept": 0,
     "dropped": [
       {
-        "url": "https://www.webintoapp.com/",
-        "reason": "the model judged it not relevant"
-      },
-      {
-        "url": "https://www.appypie.com/convert-website-to-mobile-apps",
-        "reason": "the model judged it not relevant"
-      },
-      {
-        "url": "https://m.web2application.com/",
-        "reason": "the model judged it not relevant"
-      }
-    ]
-  },
-  {
-    "timestamp": "2026-11-17T20:55:42Z",
-    "agent": "researcher",
-    "action": "search_query",
-    "sources": [],
-    "model": null,
-    "cost": 0.0,
-    "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "round": 1,
-    "evidence_type": "competitors",
-    "query": "website converter site:play.google.com",
-    "kept": 0,
-    "dropped": [
-      {
-        "url": "https://www.bing.com/aclick?ld=e8RcEc-MAgdiF9jk6pnTka-jVUCUwYdg1_dkqkY4PwZUPdnqqUTZGNpIfgoWzPrpjVLjFDNivNb1MmqNurwErRuajt6WF4yYoads0f5iym6IsOzCCg63aLs85GyJH0847ror-ZC6DvxjAqWzSvQNk6VIiO_mvBumrwEjkG9oUOJw-tG6McGvf4-NGBWBt2OJZoIvEznzUmgwXZjnqAQOhP_snTerU&u=aHR0cHMlM2ElMmYlMmZwaXhlbC5ldmVyZXN0dGVjaC5uZXQlMmYzMDg1JTJmY3ElM2Zldl9zaWQlM2QxMCUyNmV2X2xuJTNkZmlsZSUyNTIwY29udmVydGVyJTI2ZXZfbHR4JTNkJTI2ZXZfbHglM2Rrd2QtNzkxNjU0NTU0MjYxNDAlM2Fsb2MtMTg3JTI2ZXZfY3J4JTNkNzkxNjUwNDc3MzE5MTglMjZldl9tdCUzZHAlMjZldl9kdmMlM2RjJTI2ZXZfcGh5JTNkMTU0NTIyJTI2ZXZfbG9jJTNkJTI2ZXZfY3glM2Q1MDYyMjU4MDQlMjZldl9heCUzZDEyNjY2MzkwNjc5MDYxNTAlMjZldl9leCUzZCUyNmV2X2VmaWQlM2RiNmI3M2VkYmQ0ZWExMTM0MzExMjU0Mjc2YmNiY2VlZSUzYUclM2FzJTI2dXJsJTNkaHR0cHMlMjUzQSUyNTJGJTI1MkZ3d3cuYWRvYmUuY29tJTI1MkZhY3JvYmF0JTI1MkZvbmxpbmUlMjUyRmNvbnZlcnQtcGRmLmh0bWwlMjUzRnNkaWQlMjUzREhRWjZYMkxMJTI1MjZtdiUyNTNEc2VhcmNoJTI1MjZtdjIlMjUzRHBhaWRzZWFyY2glMjUyNmVmX2lkJTI1M0RiNmI3M2VkYmQ0ZWExMTM0MzExMjU0Mjc2YmNiY2VlZSUyNTNBRyUyNTNBcyUyNTI2c19rd2NpZCUyNTNEQUwhMzA4NSExMCE3OTE2NTA0NzczMTkxOCEhISE3OTE2NTQ1NTQyNjE0MCEhNTA2MjI1ODA0ITEyNjY2MzkwNjc5MDYxNTAlMjUyNm12JTI1M0RzZWFyY2glMjZtdiUzZHNlYXJjaCUyNm12MiUzZHBhaWRzZWFyY2glMjZtc2Nsa2lkJTNkYjZiNzNlZGJkNGVhMTEzNDMxMTI1NDI3NmJjYmNlZWU&rlid=b6b73edbd4ea1134311254276bcbceee",
-        "reason": "advert or redirect link"
-      },
-      {
-        "url": "https://play.google.com/store/apps/details?id=com.webtoapp.convertwebsitetoapp&hl=en-US",
+        "url": "https://www.f6s.com/companies/saas/egypt/co",
         "reason": "same source already kept"
       },
       {
-        "url": "https://play.google.com/store/apps/details?id=com.appcollection.web2app&hl=en-US",
+        "url": "https://www.f6s.com/companies/saas/egypt/cairo/co",
+        "reason": "the model judged it not relevant"
+      },
+      {
+        "url": "https://seedtable.com/best-saas-startups-in-egypt",
         "reason": "the model judged it not relevant"
       }
     ]
   },
   {
-    "timestamp": "2026-11-17T20:55:42Z",
-    "agent": "researcher",
-    "action": "judge_relevance",
-    "sources": [],
-    "model": "openai/gpt-oss-20b",
-    "cost": 0.0,
-    "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "round": 1,
-    "evidence_type": "competitors",
-    "candidates": 4,
-    "kept": 0,
-    "web_search_ok": true,
-    "tokens": 977,
-    "parsed": true,
-    "retried": false
-  },
-  {
-    "timestamp": "2026-11-17T20:55:52Z",
+    "timestamp": "2026-11-17T21:54:12Z",
     "agent": "researcher",
     "action": "search_query",
     "sources": [],
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "round": 1,
-    "evidence_type": "regulation",
-    "query": "document conversion regulation site:gov.eg",
+    "evidence_type": "competitors",
+    "query": "SaaS scheduling site:play.google.com",
     "kept": 0,
     "dropped": [
       {
-        "url": "https://sdk.invoicing.eta.gov.eg/document-validation-rules/",
-        "reason": "the model judged it not relevant"
+        "url": "https://www.bing.com/aclick?ld=e8EubdeF0iaZld8vOZ5GxTpzVUCUxTJFhAidVVYwF6PHQvBW9uH8gfABuckhccVRMANK40gtnrC5PVPgEXLRvUjkGaY69SK6jLVl8vT_3bRuIaDBVFf1yGKXG31jHFi_hp-LN07m097Gp52sE13F3dzPh70FQEnOHTc9PizyzbTMG1D_dkrec9MOrebPgbsOFmRe2OO8hg-efp6ZeP2qLkEwjWuhk&u=aHR0cHMlM2ElMmYlMmZ3d3cub2Rvby5jb20lMmZpbmR1c3RyaWVzJTJmZmluZS1kaW5pbmctcmVzdGF1cmFudCUzZm5ldHdvcmslM2RvJTI2dXRtX3NvdXJjZSUzZGJpbmclMjZ1dG1fbWVkaXVtJTNkY3BjJTI2dXRtX2NhbXBhaWduJTNkTkEtRU4tSW5kdXN0cnklMjZ1dG1fdGVybSUzZFJlc3RhdXJhbnQlMjUyMGJ1c2luZXNzJTI1MjBzb2Z0d2FyZXV0bV9nY2xpZCUzZCUyNm1zY2xraWQlM2QyZWI1YTc0YTg5OWIxMmFhYTFjNGNkYjY0NTRjN2Q4Ng&rlid=2eb5a74a899b12aaa1c4cdb6454c7d86",
+        "reason": "advert or redirect link"
       },
       {
-        "url": "https://dev.edaegypt.gov.eg/media/xhcdw4c4/regulatory-guide-450-2023_2026.pdf",
-        "reason": "the model judged it not relevant"
+        "url": "https://play.google.com/store/apps/details?id=com.ecaring.staffv2&hl=en-US",
+        "reason": "same source already kept"
       },
       {
-        "url": "https://www.edaegypt.gov.eg/media/dscbqoql/regulatory-guide-eda-chairman-decree-450-version-4-2.pdf",
+        "url": "https://play.google.com/store/apps/details?id=rw.scheduler.app&hl=en-US",
         "reason": "the model judged it not relevant"
       }
     ]
   },
   {
-    "timestamp": "2026-11-17T20:55:52Z",
+    "timestamp": "2026-11-17T21:54:12Z",
     "agent": "researcher",
     "action": "judge_relevance",
     "sources": [],
     "model": "openai/gpt-oss-20b",
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "round": 1,
-    "evidence_type": "regulation",
+    "evidence_type": "competitors",
     "candidates": 3,
     "kept": 0,
     "web_search_ok": true,
-    "tokens": 784,
+    "tokens": 941,
     "parsed": true,
     "retried": false
   },
   {
-    "timestamp": "2026-11-17T20:55:52Z",
+    "timestamp": "2026-11-17T21:54:12Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "evidence_type": "pain",
+    "query": "SME HR teams interview scheduling Cairo Egypt",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://www.pitchnhire.com/locations/egypt/cairo/interview-solutions",
+        "reason": "the model judged it not relevant"
+      },
+      {
+        "url": "https://connectalents.com/",
+        "reason": "the model judged it not relevant"
+      },
+      {
+        "url": "https://www.hren-eg.com/",
+        "reason": "the model judged it not relevant"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:54:12Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [
+      "https://www.reddit.com/r/recruiting/comments/ylvksb/looking_for_a_specific_kind_of_scheduling_tool/"
+    ],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "evidence_type": "pain",
+    "query": "interview scheduling site:reddit.com",
+    "kept": 1,
+    "dropped": [
+      {
+        "url": "https://www.reddit.com/r/humanresources/comments/1cmdnc4/what_is_your_interview_scheduling_process/",
+        "reason": "the model judged it not relevant"
+      },
+      {
+        "url": "https://www.reddit.com/r/recruiting/comments/16ckpsc/automated_interview_scheduling/",
+        "reason": "the model judged it not relevant"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:54:12Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "evidence_type": "pain",
+    "query": "SME HR teams interview scheduling site:news.ycombinator.com",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://news.ycombinator.com/user?id=beatrizalmeidaf",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://news.ycombinator.com/item?id=49522897",
+        "reason": "the model judged it not relevant"
+      },
+      {
+        "url": "https://news.ycombinator.com/item?id=49922568",
+        "reason": "the model judged it not relevant"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:54:12Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [
+      "https://www.mokahr.io/articles/ar/the-best-interview-scheduling-automation-tool",
+      "https://www.linkedin.com/pulse/5-best-tools-automating-interview-scheduling-2026-harry-portch-0wgpe?tl=ar"
+    ],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "evidence_type": "pain",
+    "query": "جدولة المقابلات أتمتة المقابلات أدوات HR",
+    "kept": 2,
+    "dropped": [
+      {
+        "url": "https://www.mokahr.io/articles/ar/the-best-interview-scheduling-with-calendar-sync",
+        "reason": "same source already kept"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:54:12Z",
+    "agent": "researcher",
+    "action": "judge_relevance",
+    "sources": [
+      "https://www.reddit.com/r/recruiting/comments/ylvksb/looking_for_a_specific_kind_of_scheduling_tool/",
+      "https://www.mokahr.io/articles/ar/the-best-interview-scheduling-automation-tool",
+      "https://www.linkedin.com/pulse/5-best-tools-automating-interview-scheduling-2026-harry-portch-0wgpe?tl=ar"
+    ],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "evidence_type": "pain",
+    "candidates": 10,
+    "kept": 3,
+    "web_search_ok": true,
+    "tokens": 1677,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:54:12Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "evidence_type": "regulation",
+    "query": "schedule interviews regulation site:gov.eg",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://gahar.gov.eg/upload/gahar-handbook-for-ambulatory-healthcare-accreditation-standards-2026--secured-.pdf",
+        "reason": "keyword score 0.0 < 0.25"
+      },
+      {
+        "url": "https://gahar.gov.eg/upload/provisional-hosp.2025--v2.pdf",
+        "reason": "the model judged it not relevant"
+      },
+      {
+        "url": "https://system.egac.gov.eg/",
+        "reason": "the model judged it not relevant"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:54:12Z",
+    "agent": "researcher",
+    "action": "judge_relevance",
+    "sources": [],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "evidence_type": "regulation",
+    "candidates": 2,
+    "kept": 0,
+    "web_search_ok": true,
+    "tokens": 695,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:54:12Z",
     "agent": "researcher",
     "action": "research_summary",
     "sources": [],
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "round": 1,
-    "claims": 2,
+    "claims": 6,
     "by_type": {
-      "pain": 0,
+      "pain": 3,
       "competitors": 0,
-      "pricing": 0,
+      "pricing": 1,
       "market": 2,
       "regulation": 0
     },
-    "search_gaps": [
-      "pricing"
-    ]
+    "search_gaps": []
   },
   {
-    "timestamp": "2026-11-17T20:55:54Z",
+    "timestamp": "2026-11-17T21:54:14Z",
     "agent": "skeptic",
     "action": "check_founder_claims",
-    "sources": [],
-    "model": "openai/gpt-oss-120b",
-    "cost": 0.0,
-    "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "round": 1,
-    "tokens": 1079,
-    "parsed": true,
-    "retried": false,
-    "verdicts": []
-  },
-  {
-    "timestamp": "2026-11-17T20:55:55Z",
-    "agent": "scorer",
-    "action": "score_rubric_scores",
     "sources": [
-      "https://api.worldbank.org/v2/country/EG/indicator/IT.NET.USER.ZS?format=json&mrnev=1",
-      "https://api.worldbank.org/v2/country/EG/indicator/SP.POP.TOTL?format=json&mrnev=1"
+      "https://www.linkedin.com/pulse/5-best-tools-automating-interview-scheduling-2026-harry-portch-0wgpe?tl=ar",
+      "https://www.reddit.com/r/recruiting/comments/ylvksb/looking_for_a_specific_kind_of_scheduling_tool/"
     ],
     "model": "openai/gpt-oss-120b",
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
+    "run_id": "demo-full-S1",
     "round": 1,
-    "tokens": 1590,
+    "tokens": 1333,
+    "parsed": true,
+    "retried": false,
+    "verdicts": [
+      "supported",
+      "unverified",
+      "contradicted"
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:54:16Z",
+    "agent": "scorer",
+    "action": "score_rubric_scores",
+    "sources": [
+      "https://api.worldbank.org/v2/country/EG/indicator/IT.NET.USER.ZS?format=json&mrnev=1",
+      "https://api.worldbank.org/v2/country/EG/indicator/SP.POP.TOTL?format=json&mrnev=1",
+      "https://www.linkedin.com/pulse/5-best-tools-automating-interview-scheduling-2026-harry-portch-0wgpe?tl=ar",
+      "https://www.mokahr.io/articles/ar/the-best-interview-scheduling-automation-tool",
+      "https://www.reddit.com/r/recruiting/comments/ylvksb/looking_for_a_specific_kind_of_scheduling_tool/",
+      "https://www.supersaas.com/"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "tokens": 2145,
     "parsed": true,
     "retried": false,
     "scores": {
-      "problem_evidence": 0.0,
+      "problem_evidence": 2.0,
       "market": 1.0,
       "competition": 1.0,
-      "founder_fit": 2.0,
+      "founder_fit": 3.0,
       "feasibility": 3.0,
-      "willingness_to_pay": 0.0,
+      "willingness_to_pay": 1.0,
       "rules_risk": 3.0
     },
     "claim_ids": {
-      "problem_evidence": [],
-      "market": [
+      "problem_evidence": [
         "C1",
-        "C2"
+        "C2",
+        "C3"
+      ],
+      "market": [
+        "C5"
       ],
       "competition": [],
       "founder_fit": [],
@@ -537,42 +562,1089 @@
     "scoring_incomplete": []
   },
   {
-    "timestamp": "2026-11-17T20:55:56Z",
-    "agent": "evaluation_memo",
-    "action": "write_memo",
-    "sources": [
-      "https://api.worldbank.org/v2/country/EG/indicator/SP.POP.TOTL?format=json&mrnev=1",
-      "https://api.worldbank.org/v2/country/EG/indicator/IT.NET.USER.ZS?format=json&mrnev=1"
-    ],
-    "model": "openai/gpt-oss-20b",
-    "cost": 0.0,
-    "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "outcome": "stop",
-    "memo_source": "model",
-    "removed": {
-      "unknown_claim_ids": 0,
-      "uncited_numbers": 6,
-      "guardrail_sentences": 0
-    },
-    "output": "phase1_step5_evaluation.md",
-    "tokens": 1119,
-    "parsed": true,
-    "retried": false
-  },
-  {
-    "timestamp": "2026-11-17T20:55:56Z",
+    "timestamp": "2026-11-17T21:54:16Z",
     "agent": "gate",
     "action": "gate_1",
     "sources": [],
     "model": null,
     "cost": 0.0,
     "approved_by": null,
-    "run_id": "demo-weak-W1b",
-    "outcome": "stop",
-    "score": 1.35,
+    "run_id": "demo-full-S1",
+    "outcome": "repeat",
+    "score": 2.0,
     "round": 1,
     "guardrail_violations": [],
-    "memo_source": "agents.evaluation_memo"
+    "memo_source": "fallback"
+  },
+  {
+    "timestamp": "2026-11-17T21:54:16Z",
+    "agent": "gate",
+    "action": "gate_1_founder_decision",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "outcome": "go",
+    "recommendation": "repeat",
+    "approved": false,
+    "note": "Approve go; otherwise override to go to run all six phases.",
+    "overrides_recommendation": true,
+    "overrode_stop": false
+  },
+  {
+    "timestamp": "2026-11-17T21:54:33Z",
+    "agent": "subdomain",
+    "action": "place_niche_and_research_competitors",
+    "sources": [],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "niche": "HR teams in Cairo SMEs (10‑200 employees) struggling with manual, error‑prone interview scheduling",
+    "stubbed_tools": [],
+    "tokens": 1011,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:54:35Z",
+    "agent": "scorer",
+    "action": "score_rubric_niche scores",
+    "sources": [
+      "https://api.worldbank.org/v2/country/EG/indicator/IT.NET.USER.ZS?format=json&mrnev=1",
+      "https://api.worldbank.org/v2/country/EG/indicator/SP.POP.TOTL?format=json&mrnev=1",
+      "https://www.linkedin.com/pulse/5-best-tools-automating-interview-scheduling-2026-harry-portch-0wgpe?tl=ar",
+      "https://www.mokahr.io/articles/ar/the-best-interview-scheduling-automation-tool",
+      "https://www.reddit.com/r/recruiting/comments/ylvksb/looking_for_a_specific_kind_of_scheduling_tool/",
+      "https://www.supersaas.com/"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "tokens": 2288,
+    "parsed": true,
+    "retried": false,
+    "scores": {
+      "problem_evidence": 1.0,
+      "market": 1.0,
+      "competition": 1.0,
+      "founder_fit": 3.0,
+      "feasibility": 3.0,
+      "willingness_to_pay": 1.0,
+      "rules_risk": 3.0
+    },
+    "claim_ids": {
+      "problem_evidence": [
+        "C1"
+      ],
+      "market": [
+        "C5"
+      ],
+      "competition": [],
+      "founder_fit": [],
+      "feasibility": [],
+      "willingness_to_pay": [],
+      "rules_risk": []
+    },
+    "scoring_incomplete": []
+  },
+  {
+    "timestamp": "2026-11-17T21:54:35Z",
+    "agent": "gate",
+    "action": "gate_1_niche",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "outcome": "stop",
+    "score": 1.8,
+    "round": 1,
+    "guardrail_violations": [],
+    "memo_source": "fallback"
+  },
+  {
+    "timestamp": "2026-11-17T21:54:35Z",
+    "agent": "gate",
+    "action": "gate_1_niche_founder_decision",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "outcome": "go",
+    "recommendation": "stop",
+    "approved": false,
+    "note": "Approve go; otherwise override to go to run all six phases.",
+    "overrides_recommendation": true,
+    "overrode_stop": true
+  },
+  {
+    "timestamp": "2026-11-17T21:54:37Z",
+    "agent": "phase2_lean_canvas",
+    "action": "draft_lean_canvas",
+    "sources": [
+      "https://www.mokahr.io/articles/ar/the-best-interview-scheduling-automation-tool",
+      "https://www.reddit.com/r/recruiting/comments/ylvksb/looking_for_a_specific_kind_of_scheduling_tool/"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "violations": [],
+    "rewrote": false,
+    "status": "STUBBED",
+    "claims": 14,
+    "assumptions": 11,
+    "tokens": 1680,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:54:37Z",
+    "agent": "gate",
+    "action": "gate_2_targets",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-full-S1",
+    "targets": {
+      "waitlist_target": 100,
+      "paid_orders": 10
+    }
+  },
+  {
+    "timestamp": "2026-11-17T21:54:37Z",
+    "agent": "gate",
+    "action": "gate_2",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "phase": 2,
+    "outcome": "repeat",
+    "memo_source": "fallback"
+  },
+  {
+    "timestamp": "2026-11-17T21:54:37Z",
+    "agent": "gate",
+    "action": "gate_2_founder_decision",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "outcome": "go",
+    "recommendation": "repeat",
+    "approved": false,
+    "note": "Approve go; otherwise override to go to run all six phases.",
+    "overrides_recommendation": true,
+    "overrode_stop": false
+  },
+  {
+    "timestamp": "2026-11-17T21:54:40Z",
+    "agent": "phase3_build_plan",
+    "action": "draft_build_plan",
+    "sources": [],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "violations": [],
+    "rewrote": false,
+    "status": "STUBBED",
+    "claims": 4,
+    "assumptions": 4,
+    "tokens": 1868,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:54:40Z",
+    "agent": "gate",
+    "action": "gate_3_plan",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "phase": 3,
+    "outcome": "go",
+    "memo_source": "fallback"
+  },
+  {
+    "timestamp": "2026-11-17T21:54:40Z",
+    "agent": "gate",
+    "action": "gate_3_plan_founder_decision",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "outcome": "go",
+    "recommendation": "go",
+    "approved": true,
+    "note": "Approve go; otherwise override to go to run all six phases.",
+    "overrides_recommendation": false,
+    "overrode_stop": false
+  },
+  {
+    "timestamp": "2026-11-17T21:54:40Z",
+    "agent": "gate",
+    "action": "build_options",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-full-S1",
+    "product_format": "Let the build agent choose",
+    "must_include": ""
+  },
+  {
+    "timestamp": "2026-11-17T21:54:50Z",
+    "agent": "phase3_build",
+    "action": "build_product",
+    "sources": [],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "status": "STUBBED",
+    "product_format": "markdown",
+    "full_app_needed": true,
+    "files": [
+      "phase3_step2_landing.html",
+      "phase3_step3_product_interview_scheduler_guide.md",
+      "phase3_step4_user_docs.md"
+    ],
+    "checks_failed": [],
+    "recommendation": "go",
+    "tokens": 2907,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:54:50Z",
+    "agent": "gate",
+    "action": "gate_3",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "phase": 3,
+    "outcome": "go",
+    "memo_source": "fallback"
+  },
+  {
+    "timestamp": "2026-11-17T21:54:50Z",
+    "agent": "gate",
+    "action": "gate_3_founder_decision",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "outcome": "go",
+    "recommendation": "go",
+    "approved": true,
+    "note": "Approve go; otherwise override to go to run all six phases.",
+    "overrides_recommendation": false,
+    "overrode_stop": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:03Z",
+    "agent": "phase4_commercial",
+    "action": "draft_commercial",
+    "sources": [
+      "https://www.linkedin.com/pulse/5-best-tools-automating-interview-scheduling-2026-harry-portch-0wgpe?tl=ar",
+      "https://www.mokahr.io/articles/ar/the-best-interview-scheduling-automation-tool",
+      "https://www.reddit.com/r/recruiting/comments/ylvksb/looking_for_a_specific_kind_of_scheduling_tool/"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "violations": [],
+    "rewrote": false,
+    "status": "STUBBED",
+    "claims": 7,
+    "assumptions": 4,
+    "tokens": 1542,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:03Z",
+    "agent": "gate",
+    "action": "gate_4",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "phase": 4,
+    "outcome": "go",
+    "memo_source": "fallback"
+  },
+  {
+    "timestamp": "2026-11-17T21:55:03Z",
+    "agent": "gate",
+    "action": "gate_4_founder_decision",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "outcome": "go",
+    "recommendation": "go",
+    "approved": true,
+    "note": "Approve go; otherwise override to go to run all six phases.",
+    "overrides_recommendation": false,
+    "overrode_stop": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:15Z",
+    "agent": "phase5_launch",
+    "action": "draft_launch",
+    "sources": [
+      "https://api.worldbank.org/v2/country/EG/indicator/IT.NET.USER.ZS?format=json&mrnev=1",
+      "https://www.mokahr.io/articles/ar/the-best-interview-scheduling-automation-tool",
+      "https://www.reddit.com/r/recruiting/comments/ylvksb/looking_for_a_specific_kind_of_scheduling_tool/"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "violations": [],
+    "rewrote": false,
+    "status": "STUBBED",
+    "claims": 6,
+    "assumptions": 3,
+    "tokens": 1689,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:15Z",
+    "agent": "gate",
+    "action": "gate_5",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "phase": 5,
+    "outcome": "go",
+    "memo_source": "fallback",
+    "payment_test_passed": true,
+    "payment_test": "all steps passed"
+  },
+  {
+    "timestamp": "2026-11-17T21:55:15Z",
+    "agent": "gate",
+    "action": "gate_5_founder_decision",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "outcome": "go",
+    "recommendation": "go",
+    "approved": true,
+    "note": "Approve go; otherwise override to go to run all six phases.",
+    "overrides_recommendation": false,
+    "overrode_stop": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:20Z",
+    "agent": "phase6_memo",
+    "action": "draft_memo",
+    "sources": [],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "violations": [],
+    "rewrote": false,
+    "status": "STUBBED",
+    "claims": 7,
+    "assumptions": 3,
+    "tokens": 769,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:20Z",
+    "agent": "gate",
+    "action": "gate_6",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "phase": 6,
+    "outcome": "repeat",
+    "memo_source": "fallback"
+  },
+  {
+    "timestamp": "2026-11-17T21:55:20Z",
+    "agent": "gate",
+    "action": "gate_6_founder_decision",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-full-S1",
+    "round": 1,
+    "outcome": "go",
+    "recommendation": "repeat",
+    "approved": false,
+    "note": "Approve go; otherwise override to go to run all six phases.",
+    "overrides_recommendation": true,
+    "overrode_stop": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:20Z",
+    "agent": "orchestrator",
+    "action": "run_finished",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-full-S1",
+    "stopped": false,
+    "phase": 6,
+    "run_tokens": 26128,
+    "over_token_budget": true
+  },
+  {
+    "timestamp": "2026-11-17T21:55:20Z",
+    "agent": "orchestrator",
+    "action": "start_run",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1"
+  },
+  {
+    "timestamp": "2026-11-17T21:55:20Z",
+    "agent": "guardrails",
+    "action": "category_check_model",
+    "sources": [],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "tokens": 524,
+    "outcome": "allowed"
+  },
+  {
+    "timestamp": "2026-11-17T21:55:20Z",
+    "agent": "guardrails",
+    "action": "category_check",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "allowed": true,
+    "category": "allowed",
+    "stubbed": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:21Z",
+    "agent": "discovery",
+    "action": "discovery_round_1",
+    "sources": [],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "source": "fallback",
+    "questions": 3,
+    "unclear": [],
+    "missing_fields": [],
+    "raw_reply": null,
+    "tokens": 1160,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:21Z",
+    "agent": "discovery",
+    "action": "discovery_answers_round_1",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "answered": [],
+    "guardrail_violations": []
+  },
+  {
+    "timestamp": "2026-11-17T21:55:22Z",
+    "agent": "discovery",
+    "action": "discovery_round_2",
+    "sources": [],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "source": "fallback",
+    "questions": 3,
+    "unclear": [],
+    "missing_fields": [],
+    "raw_reply": null,
+    "tokens": 1326,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:22Z",
+    "agent": "discovery",
+    "action": "discovery_answers_round_2",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "answered": [],
+    "guardrail_violations": []
+  },
+  {
+    "timestamp": "2026-11-17T21:55:23Z",
+    "agent": "discovery",
+    "action": "discovery_round_3",
+    "sources": [],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "source": "fallback",
+    "questions": 0,
+    "unclear": [],
+    "missing_fields": [],
+    "raw_reply": null,
+    "tokens": 1113,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:23Z",
+    "agent": "discovery",
+    "action": "discovery_confirmed",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-weak-W1",
+    "rounds": 3
+  },
+  {
+    "timestamp": "2026-11-17T21:55:23Z",
+    "agent": "guardrails",
+    "action": "category_check_model",
+    "sources": [],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "tokens": 533,
+    "outcome": "allowed"
+  },
+  {
+    "timestamp": "2026-11-17T21:55:23Z",
+    "agent": "guardrails",
+    "action": "category_check",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "allowed": true,
+    "category": "allowed",
+    "stubbed": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:23Z",
+    "agent": "search_plan",
+    "action": "build_search_plan",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "queries": 9,
+    "evidence_types": [
+      "competitors",
+      "market",
+      "pain",
+      "pricing",
+      "regulation"
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:55:23Z",
+    "agent": "researcher",
+    "action": "market_indicators",
+    "sources": [
+      "https://api.worldbank.org/v2/country/EG/indicator/SP.POP.TOTL?format=json&mrnev=1",
+      "https://api.worldbank.org/v2/country/EG/indicator/IT.NET.USER.ZS?format=json&mrnev=1"
+    ],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "market"
+  },
+  {
+    "timestamp": "2026-11-17T21:55:24Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [
+      "https://converter.app/"
+    ],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "competitors",
+    "query": "online converter app Egypt",
+    "kept": 1,
+    "dropped": [
+      {
+        "url": "https://converter.app/ar/",
+        "reason": "same source already kept"
+      },
+      {
+        "url": "https://apps.apple.com/us/app/egyptian-convert/id6749766125",
+        "reason": "the model judged it not relevant"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:55:24Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [
+      "https://play.google.com/store/apps/details?id=com.onlineconvert.ocapp&hl=en-US"
+    ],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "competitors",
+    "query": "online converter site:play.google.com",
+    "kept": 1,
+    "dropped": [
+      {
+        "url": "https://play.google.com/store/apps/details?id=app.convert&hl=en-US",
+        "reason": "same source already kept"
+      },
+      {
+        "url": "https://play.google.com/store/apps/details?id=com.icecoldapps.fileconverter&hl=en-US",
+        "reason": "same source already kept"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:55:24Z",
+    "agent": "researcher",
+    "action": "judge_relevance",
+    "sources": [
+      "https://converter.app/",
+      "https://play.google.com/store/apps/details?id=com.onlineconvert.ocapp&hl=en-US"
+    ],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "competitors",
+    "candidates": 3,
+    "kept": 2,
+    "web_search_ok": true,
+    "tokens": 950,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:31Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "pricing",
+    "query": "online converter price Egypt",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://en.wikipedia.org/wiki/Lada_Riva",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://en.wikipedia.org/wiki/Foreign_exchange_market",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://en.wikipedia.org/wiki/Allison_Transmission",
+        "reason": "keyword score 0: shares no word with the query"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:55:31Z",
+    "agent": "researcher",
+    "action": "judge_relevance",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "pricing",
+    "candidates": 0,
+    "kept": 0,
+    "web_search_ok": false,
+    "tokens": 0,
+    "parsed": null,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:31Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "regulation",
+    "query": "file upload regulation site:gov.eg",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://en.wikipedia.org/wiki/ClinicalTrials.gov",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://en.wikipedia.org/wiki/Online_age_verification_laws_in_the_United_States",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://en.wikipedia.org/wiki/Secondary_school",
+        "reason": "keyword score 0: shares no word with the query"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:55:31Z",
+    "agent": "researcher",
+    "action": "judge_relevance",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "regulation",
+    "candidates": 0,
+    "kept": 0,
+    "web_search_ok": false,
+    "tokens": 0,
+    "parsed": null,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:39Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [
+      "https://www.ilovepdf.com/ar/pdf_to_word",
+      "https://smallpdf.com/ar/pdf-to-word"
+    ],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "pain",
+    "query": "university students PDF Word conversion Egypt",
+    "kept": 2,
+    "dropped": [
+      {
+        "url": "https://www.bing.com/aclick?ld=e8ptoUFKfOFJfClpH6ttTZGDVUCUxPogbcXX_vNKxdl01qOwipTcApmDEHGaMf6COFlKpuIq5Q4GXcNAZ8WFn4h-5f84zAEeZJEHvS1u3FI3JNLBtInqGADl-8ew_ZiG5orGns7uy5pn87z1bi36NnSlQAChPQPEdow_68cKL1knybiD4QhSBwoPkSQy3GUdSDy4-WiAmG-uRFc4gAcmAQHee7o8s&u=aHR0cHMlM2ElMmYlMmZwaXhlbC5ldmVyZXN0dGVjaC5uZXQlMmYzMDg1JTJmY3ElM2Zldl9zaWQlM2QxMCUyNmV2X2xuJTNkZmlsZSUyNTIwY29udmVydGVyJTI2ZXZfbHR4JTNkJTI2ZXZfbHglM2Rrd2QtNzkxNjU0NTU0MjYxNDAlM2Fsb2MtMTg3JTI2ZXZfY3J4JTNkNzkxNjUwNDc3MzE5MTglMjZldl9tdCUzZHAlMjZldl9kdmMlM2RjJTI2ZXZfcGh5JTNkMTU0NTIyJTI2ZXZfbG9jJTNkMTg3JTI2ZXZfY3glM2Q1MDYyMjU4MDQlMjZldl9heCUzZDEyNjY2MzkwNjc5MDYxNTAlMjZldl9leCUzZCUyNmV2X2VmaWQlM2QzZmQ1ZDQxYTc3NmExNzA4YWJhY2JlZTZiYzYxZDcwMyUzYUclM2FzJTI2dXJsJTNkaHR0cHMlMjUzQSUyNTJGJTI1MkZ3d3cuYWRvYmUuY29tJTI1MkZhY3JvYmF0JTI1MkZvbmxpbmUlMjUyRmNvbnZlcnQtcGRmLmh0bWwlMjUzRnNkaWQlMjUzREhRWjZYMkxMJTI1MjZtdiUyNTNEc2VhcmNoJTI1MjZtdjIlMjUzRHBhaWRzZWFyY2glMjUyNmVmX2lkJTI1M0QzZmQ1ZDQxYTc3NmExNzA4YWJhY2JlZTZiYzYxZDcwMyUyNTNBRyUyNTNBcyUyNTI2c19rd2NpZCUyNTNEQUwhMzA4NSExMCE3OTE2NTA0NzczMTkxOCEhISE3OTE2NTQ1NTQyNjE0MCEhNTA2MjI1ODA0ITEyNjY2MzkwNjc5MDYxNTAlMjUyNm12JTI1M0RzZWFyY2glMjZtdiUzZHNlYXJjaCUyNm12MiUzZHBhaWRzZWFyY2glMjZtc2Nsa2lkJTNkM2ZkNWQ0MWE3NzZhMTcwOGFiYWNiZWU2YmM2MWQ3MDM&rlid=3fd5d41a776a1708abacbee6bc61d703",
+        "reason": "advert or redirect link"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:55:39Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "pain",
+    "query": "PDF to Word conversion site:reddit.com",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://en.wikipedia.org/wiki/Markdown",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://en.wikipedia.org/wiki/Femboy",
+        "reason": "keyword score 0: shares no word with the query"
+      },
+      {
+        "url": "https://en.wikipedia.org/wiki/Review_site",
+        "reason": "keyword score 0: shares no word with the query"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:55:39Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "pain",
+    "query": "university students PDF to Word conversion site:news.ycombinator.com",
+    "kept": 0,
+    "dropped": [
+      {
+        "url": "https://www.bing.com/aclick?ld=e8I0-FEaQ7W_3UrKVfDGDHwzVUCUxgYE8EO-yungn3PkfTafMIKWLMwU7ao8zOeqnRI15-_VKZxIGHga18nZehvIjevRZab1WthrbabmOETzgfKGqQmgvGDp9uvMH_FzkF4kzsoOe2pU53fgMGYEKiCD1L9Av1sB5_Grzy7y_EjrRpFAxu08dagbwCWtMDYAhF4QqRGP2YwfkJ_9fFxnovpFNVzn4&u=aHR0cHMlM2ElMmYlMmZwaXhlbC5ldmVyZXN0dGVjaC5uZXQlMmYzMDg1JTJmY3ElM2Zldl9zaWQlM2QxMCUyNmV2X2xuJTNkZmlsZSUyNTIwY29udmVydGVyJTI2ZXZfbHR4JTNkJTI2ZXZfbHglM2Rrd2QtNzkxNjU0NTU0MjYxNDAlM2Fsb2MtMTg3JTI2ZXZfY3J4JTNkNzkxNjUwNDc3MzE5MTglMjZldl9tdCUzZHAlMjZldl9kdmMlM2RjJTI2ZXZfcGh5JTNkMTU0NTIyJTI2ZXZfbG9jJTNkJTI2ZXZfY3glM2Q1MDYyMjU4MDQlMjZldl9heCUzZDEyNjY2MzkwNjc5MDYxNTAlMjZldl9leCUzZCUyNmV2X2VmaWQlM2Q5YmMwNWUzZWU3NmQxZTBkMzFlMDM0YzIyYzc0NjMwYSUzYUclM2FzJTI2dXJsJTNkaHR0cHMlMjUzQSUyNTJGJTI1MkZ3d3cuYWRvYmUuY29tJTI1MkZhY3JvYmF0JTI1MkZvbmxpbmUlMjUyRmNvbnZlcnQtcGRmLmh0bWwlMjUzRnNkaWQlMjUzREhRWjZYMkxMJTI1MjZtdiUyNTNEc2VhcmNoJTI1MjZtdjIlMjUzRHBhaWRzZWFyY2glMjUyNmVmX2lkJTI1M0Q5YmMwNWUzZWU3NmQxZTBkMzFlMDM0YzIyYzc0NjMwYSUyNTNBRyUyNTNBcyUyNTI2c19rd2NpZCUyNTNEQUwhMzA4NSExMCE3OTE2NTA0NzczMTkxOCEhISE3OTE2NTQ1NTQyNjE0MCEhNTA2MjI1ODA0ITEyNjY2MzkwNjc5MDYxNTAlMjUyNm12JTI1M0RzZWFyY2glMjZtdiUzZHNlYXJjaCUyNm12MiUzZHBhaWRzZWFyY2glMjZtc2Nsa2lkJTNkOWJjMDVlM2VlNzZkMWUwZDMxZTAzNGMyMmM3NDYzMGE&rlid=9bc05e3ee76d1e0d31e034c22c74630a",
+        "reason": "advert or redirect link"
+      },
+      {
+        "url": "https://www.bing.com/aclick?ld=e8KE8gY1xXzYlgFTN7qaYSkjVUCUw7aQN7XG5dG2473Zuni2ygXwCEZpnTFfKnsFMYNou2QwtZxV0BZzgSZH_nJ25sE83WMgS6x1jSn4rP0f1ZA2sUkZyizq9TAADzHNqO-QZ39Vd6r27AmnQvGkEatBNESK0easFslN_QACWdYho7UhGmwRr3pYbtNl1IuxgaZh316gGkRRUBaKO5R6zIDkogsy8&u=aHR0cHMlM2ElMmYlMmZmaWxlcy1lZGl0b3IuY29tJTJmZW4lMmZ1cGxvYWQlMmZwZGYtZG9jeCUzZnV0bV9zb3VyY2UlM2RiaW5nJTI2dXRtX21lZGl1bSUzZGNwYyUyNnV0bV9jb250ZW50JTNkRU4lMjUyMC0lMjUyMENvbnZlcnQlMjUyMFBERiUyNTIwdG8lMjUyMFdvcmQlMjZ1dG1fY2FtcGFpZ24lM2RBRiUyNTIwLSUyNTIwTUIzJTI1MjAtJTI1MjBFbmdsaXNoJTI1MjAtJTI1MjBDb21wdXRlcl9CaW5nJTI2dXRtX3Rlcm0lM2R0dXJuJTI1MjBwZGYlMjUyMGludG8lMjUyMGRvY3glMjZjYW1wYWlnbklkJTNkNDg3MTk2MTA2JTI2YWRHcm91cElkJTNkMTIzODA1MTQ3NTk3OTUwMCUyNmZlZWRJdGVtSWQlM2QlMjZ0YXJnZXRJZCUzZGt3ZC03NzM3ODY5NTkwODM5MCUzYWxvYy0xODclMjZtYXRjaFR5cGUlM2RlJTI2bmV0d29yayUzZG8lMjZkZXZpY2UlM2RjJTI2ZGV2aWNlVHlwZSUzZGRlc2t0b3AlMjZjYW1wYWlnblR5cGUlM2RzZWFyY2glMjZjcmVhdGl2ZUlkJTNkNzczNzgzNjI0Njc0ODAlMjZrZXl3b3JkJTNkdW5pdmVyc2l0eSUyNTIwc3R1ZGVudHMlMjUyMFBERiUyNTIwdG8lMjUyMFdvcmQlMjUyMGNvbnZlcnNpb24lMjZ1dG1faWQlM2Q0ODcxOTYxMDYlMjZmeCUzZHR1cm4lMjUyMHBkZiUyNTIwaW50byUyNTIwZG9jeCUyNmdhaWQlM2RBRi1FTi1DLURQRi1NUyUyNm1zY2xraWQlM2Q2Mjg1N2JiZjQ2MGYxNmQxZjI5MjExNDM4ZDE2MjA1NQ&rlid=62857bbf460f16d1f29211438d162055",
+        "reason": "advert or redirect link"
+      },
+      {
+        "url": "https://news.ycombinator.com/user?id=aaditsingal7859",
+        "reason": "keyword score 0: shares no word with the query"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:55:39Z",
+    "agent": "researcher",
+    "action": "search_query",
+    "sources": [
+      "https://www.adobe.com/eg_ar/acrobat/online/pdf-to-word.html"
+    ],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "pain",
+    "query": "تحويل PDF إلى Word موقع تحويل PDF مستندات Word",
+    "kept": 1,
+    "dropped": [
+      {
+        "url": "https://www.bing.com/aclick?ld=e8gVLI7W_Rf8ZfSfGp2oKk5zVUCUy4SRLBNhMUbrAhFcR3TAImqPunze-_y0V7Fo8xeQmu0QD_AMwVSf7QTcFGGgwc7VEQMznJKsyDrzIrZms3e2kL8tzjmTPp8tdm8phC80xLAqoCU0tJYRblqE5KAZOYO92jlkPwb_C3fQdWLSW3wef6jyU6l99nSICQD87bqz991w&u=aHR0cHMlM2ElMmYlMmZwZGZndXJ1LmNvbSUyZmFwcCUyZmFyJTJmY29tcHJlc3MtcGRmJTNmbmV3LWxhbmRpbmdzJTNkMSUyNmlkX3BhcnRuZXIlM2RiX3NlYXJjaCUyNmZlYXR1cmUlM2RDb21wcmVzc1BERiUyNmNsaWNraWQlM2Q2YzU4ZjhlNGY3NWQxYTFhZDQwOTkyMTgzYTczZDk0ZiUyNmNhbXBpZCUzZDU2OTk2NzY2OSUyNmFnaWQlM2QxMTc2NDc5MzM2NTg3MDkyJTI2a2V5d29yZCUzZHBkZiUyNTIwJWQ4JWE1JWQ5JTg0JWQ5JTg5JTI1MjB3b3JkJTI2bWF0Y2h0eXBlJTNkcCUyNmNyZWF0aWQlM2QlMjZleHRpZCUzZCU3YmV4dGVuc2lvbmlkJTdkJTI2dGFyZ2V0aWQlM2Rrd2QtNzM1MzA1NzYyMTg2MjMlMjZkZXZpY2UlM2RjJTI2ZGV2bW9kJTNkJTI2cGxhY2VtZW50JTNkJTI2YWRwb3MlM2QlMjZtc2Nsa2lkJTNkNmM1OGY4ZTRmNzVkMWExYWQ0MDk5MjE4M2E3M2Q5NGY&rlid=6c58f8e4f75d1a1ad40992183a73d94f",
+        "reason": "advert or redirect link"
+      },
+      {
+        "url": "https://www.ilovepdf.com/ar/pdf_to_word",
+        "reason": "same source already kept"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:55:39Z",
+    "agent": "researcher",
+    "action": "judge_relevance",
+    "sources": [
+      "https://www.ilovepdf.com/ar/pdf_to_word",
+      "https://smallpdf.com/ar/pdf-to-word",
+      "https://www.adobe.com/eg_ar/acrobat/online/pdf-to-word.html"
+    ],
+    "model": "openai/gpt-oss-20b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "evidence_type": "pain",
+    "candidates": 3,
+    "kept": 3,
+    "web_search_ok": true,
+    "tokens": 867,
+    "parsed": true,
+    "retried": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:39Z",
+    "agent": "researcher",
+    "action": "research_summary",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "claims": 7,
+    "by_type": {
+      "pain": 3,
+      "competitors": 2,
+      "pricing": 0,
+      "market": 2,
+      "regulation": 0
+    },
+    "search_gaps": [
+      "pricing",
+      "regulation"
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:55:40Z",
+    "agent": "skeptic",
+    "action": "check_founder_claims",
+    "sources": [
+      "https://converter.app/",
+      "https://play.google.com/store/apps/details?id=com.onlineconvert.ocapp&hl=en-US",
+      "https://smallpdf.com/ar/pdf-to-word",
+      "https://www.adobe.com/eg_ar/acrobat/online/pdf-to-word.html",
+      "https://www.ilovepdf.com/ar/pdf_to_word"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "tokens": 1351,
+    "parsed": true,
+    "retried": false,
+    "verdicts": [
+      "contradicted",
+      "contradicted"
+    ]
+  },
+  {
+    "timestamp": "2026-11-17T21:55:47Z",
+    "agent": "scorer",
+    "action": "score_rubric_scores",
+    "sources": [
+      "https://api.worldbank.org/v2/country/EG/indicator/IT.NET.USER.ZS?format=json&mrnev=1",
+      "https://api.worldbank.org/v2/country/EG/indicator/SP.POP.TOTL?format=json&mrnev=1",
+      "https://converter.app/",
+      "https://play.google.com/store/apps/details?id=com.onlineconvert.ocapp&hl=en-US",
+      "https://smallpdf.com/ar/pdf-to-word",
+      "https://www.adobe.com/eg_ar/acrobat/online/pdf-to-word.html",
+      "https://www.ilovepdf.com/ar/pdf_to_word"
+    ],
+    "model": "openai/gpt-oss-120b",
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "tokens": 2181,
+    "parsed": true,
+    "retried": false,
+    "scores": {
+      "problem_evidence": 2.0,
+      "market": 1.0,
+      "competition": 0.0,
+      "founder_fit": 3.0,
+      "feasibility": 3.0,
+      "willingness_to_pay": 0.0,
+      "rules_risk": 3.0
+    },
+    "claim_ids": {
+      "problem_evidence": [
+        "C1",
+        "C2",
+        "C3"
+      ],
+      "market": [
+        "C6",
+        "C7"
+      ],
+      "competition": [
+        "C4"
+      ],
+      "founder_fit": [],
+      "feasibility": [],
+      "willingness_to_pay": [],
+      "rules_risk": []
+    },
+    "scoring_incomplete": []
+  },
+  {
+    "timestamp": "2026-11-17T21:55:47Z",
+    "agent": "gate",
+    "action": "gate_1",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "outcome": "stop",
+    "score": 1.75,
+    "round": 1,
+    "guardrail_violations": [],
+    "memo_source": "fallback"
+  },
+  {
+    "timestamp": "2026-11-17T21:55:47Z",
+    "agent": "gate",
+    "action": "gate_1_founder_decision",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": "founder",
+    "run_id": "demo-weak-W1",
+    "round": 1,
+    "outcome": "stop",
+    "recommendation": "stop",
+    "approved": true,
+    "note": "Founder approves STOP: free tools already solve PDF-to-Word conversion.",
+    "overrides_recommendation": false,
+    "overrode_stop": false
+  },
+  {
+    "timestamp": "2026-11-17T21:55:47Z",
+    "agent": "orchestrator",
+    "action": "run_finished",
+    "sources": [],
+    "model": null,
+    "cost": 0.0,
+    "approved_by": null,
+    "run_id": "demo-weak-W1",
+    "stopped": true,
+    "phase": 1,
+    "run_tokens": 10005,
+    "over_token_budget": false
   }
 ]
