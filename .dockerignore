@@ -1,0 +1,17 @@
+# Keep secrets, local environments and run output out of the Docker image.
+# The app still reads .env at run time: docker-compose.yml passes it in with env_file.
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+.cache/
+.git/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+decision_log.json
+outputs/*
+!outputs/.gitkeep
+[Pp][Ll][Aa][Nn].md
+*.pdf

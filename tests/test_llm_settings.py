@@ -106,6 +106,13 @@ def test_compose_writes_decision_log_to_a_mounted_folder(compose):
     assert Path(log_path).name == "decision_log.json"
 
 
+def test_docker_image_never_contains_secrets_or_local_envs():
+    ignored = (ROOT_DIR / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    for pattern in (".env", ".venv/", ".cache/", "decision_log.json"):
+        assert pattern in ignored, pattern
+    assert "!.env.example" in ignored
+
+
 # ---------------------------------------------------------------- .env.example
 
 def test_env_example_documents_the_local_setup_with_placeholders_only():
