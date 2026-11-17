@@ -5,6 +5,7 @@ idea gets stop, a strong idea goes through both gates, the coach loop, and
 that nothing moves past a gate without a FounderDecision.
 """
 
+import functools
 import json
 import sys
 from pathlib import Path
@@ -17,6 +18,7 @@ sys.path.insert(0, str(ROOT_DIR))
 from langgraph.checkpoint.memory import InMemorySaver  # noqa: E402
 
 import agents._common as common  # noqa: E402
+import guardrails  # noqa: E402
 import logger  # noqa: E402
 import orchestrator  # noqa: E402
 import tools.credibility  # noqa: E402
@@ -72,6 +74,8 @@ def run(tmp_path, monkeypatch):
     monkeypatch.setattr(common, "invoke_model", model)
     monkeypatch.setattr(tools.search, "search", fake_search)
     monkeypatch.setattr(tools.credibility, "rate", lambda url: "B")
+    # Keyword rules only: no model call from the category check.
+    monkeypatch.setattr(guardrails, "check_category", functools.partial(guardrails.check_category, use_model=False))
     orchestrator.set_graph(orchestrator.build_graph(InMemorySaver()))
     yield {"model": model, "out": tmp_path / "outputs", "log": tmp_path / "log.json"}
     orchestrator.set_graph(None)
