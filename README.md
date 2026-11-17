@@ -19,18 +19,19 @@ The repository is being built during the hackathon. A row says **Working** only 
 | Phase | Step | Status | Notes |
 |---|---|---|---|
 | All | Shared foundation: settings, model client, state schemas, decision log, output writer (`config.py`, `llm.py`, `schemas.py`, `logger.py`) | **Working** | `tests/test_smoke.py` |
-| All | LangGraph orchestration (`orchestrator.py`) | **STUBBED** | Not built yet |
+| All | LangGraph orchestration, SQLite checkpoints, `start_run` / `resume_run` / `get_state` (`orchestrator.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
 | All | Founder approve/reject at every gate (`approval.py`, `gates.py`) | **Working** | `tests/test_record_decision.py`, `tests/test_approval.py`, `tests/test_gates.py` |
 | All | Guardrails (`guardrails.py`) | **Working** | `tests/test_guardrails.py`, `tests/test_guardrail_eval.py`; results in `evals/guardrail_results.md` |
 | All | Data tools: web search with a fallback chain of free engines, World Bank indicators, A–D source ratings (`tools/search.py`, `tools/worldbank.py`, `tools/credibility.py`) | **Working** | `tests/test_search.py`, `tests/test_worldbank.py`, `tests/test_credibility.py` |
-| Discover | Intake and follow-up questions | **STUBBED** | Not built yet |
-| Discover | Business-area weighting, research with rated sources | **STUBBED** | Not built yet |
-| Discover | Claim check, rubric score, Gate 1 with STOP | **STUBBED** | Not built yet |
-| Validate | Lean Canvas, landing-page copy | **STUBBED** | Not built yet |
-| Build | Product, UI/UX and MVP-plan proposals | **STUBBED** | Not built yet |
-| Commercial setup | Pricing and draft policies | **STUBBED** | Not built yet |
+| Discover | Intake and follow-up questions (`agents/intake.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
+| Discover | Category check, business-area weighting, research with rated sources (`guardrails.py`, `agents/weigher.py`, `agents/researcher.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
+| Discover | Claim check, rubric score, Gate 1 with STOP (`agents/skeptic.py`, `agents/scorer.py`, `gates.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
+| Discover | Coach loop, niche step and niche gate (`agents/coach.py`, `agents/subdomain.py`) | **STUBBED** | Tested offline only (`tests/test_orchestrator.py`) |
+| Validate | Lean Canvas, landing-page copy (`agents/phase2_lean_canvas.py`) | **STUBBED** | Drafts built and tested (`tests/test_phase_agents.py`), not wired into the graph yet |
+| Build | Product, UI/UX and MVP-plan proposals (`agents/phase3_build_plan.py`, `agents/phase3_build.py`) | **STUBBED** | Drafts built and tested (`tests/test_phase_agents.py`), not wired into the graph yet |
+| Commercial setup | Pricing and draft policies (`agents/phase4_commercial.py`) | **STUBBED** | Drafts built and tested (`tests/test_phase_agents.py`), not wired into the graph yet |
 | Sell/deliver/get paid | Checkout, delivery, refunds, reconciliation (`payments.py`, `delivery.py`, `refunds.py`, `reconcile.py`) | **MOCKED** | Fake in-memory events: no payment provider, no sandbox, no real money. `tests/test_sale_to_cash.py`; `outputs/payment_test_log.md` |
-| Operate and learn | Metrics and persevere-or-pivot memo | **STUBBED** | Not built yet |
+| Operate and learn | Metrics and persevere-or-pivot memo (`agents/phase6_memo.py`) | **STUBBED** | Drafts built and tested (`tests/test_phase_agents.py`), not wired into the graph yet |
 
 ## Architecture
 
