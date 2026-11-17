@@ -190,3 +190,53 @@ def test_middle_band_repeat_when_pain_is_thin():
 def test_caps_never_upgrade_an_outcome():
     r = gates.evaluate_gate_1(scores(2, problem_evidence=3), [pain("a.org"), assumption()])
     assert r.recommendation == "pivot"
+
+
+# ---- Phases 2-6 gates (PLAN.md section 4)
+
+CANVAS_DRAFT = {"canvas": {}, "landing_page": {"headline": "h"}, "violations": []}
+HIT = {"violations": [{"rule": "fake_social_proof", "excerpt": "Join 5,000 happy users"}]}
+
+
+@pytest.mark.parametrize("targets, expected", [
+    ({}, "repeat"),                                              # no target set
+    ({"waitlist_target": 100}, "repeat"),                        # no real count: never estimated
+    ({"waitlist_target": 100, "waitlist_count": 12}, "stop"),    # far below (PLAN.md: 12 of 100)
+    ({"waitlist_target": 100, "waitlist_count": 60}, "repeat"),  # missed by a little
+    ({"waitlist_target": 100, "waitlist_count": 100}, "go"),
+])
+def test_gate_2_waitlist_rules(targets, expected):
+    assert gates.evaluate_gate_2(CANVAS_DRAFT, targets).recommendation == expected
+
+
+def test_draft_violation_holds_later_gates_at_repeat():
+    assert gates.evaluate_gate_2({**CANVAS_DRAFT, **HIT}, {"waitlist_target": 10, "waitlist_count": 20}).recommendation == "repeat"
+    assert gates.evaluate_gate_3_plan({"stack": ["x"], "mvp_features": ["y"], **HIT}).recommendation == "repeat"
+
+
+def test_gate_3_follows_the_build_checks():
+    assert gates.evaluate_gate_3({"checks": [], "recommendation": "go"}).recommendation == "go"
+    r = gates.evaluate_gate_3({"checks": ["landing page HTML does not parse"], "recommendation": "repeat"})
+    assert r.recommendation == "repeat" and "does not parse" in r.reasons[0]
+    assert gates.evaluate_gate_3({}).recommendation == "repeat"
+
+
+def test_gate_4_needs_a_price_basis_and_three_policies():
+    full = {"pricing": {"price": "250", "currency": "EGP", "basis": [{"text": "b"}]},
+            "policies": {"terms": ["t"], "privacy": ["p"], "refund": ["r"]}, "price_has_sourced_basis": True}
+    assert gates.evaluate_gate_4(full).recommendation == "go"
+    no_refund = {**full, "policies": {"terms": ["t"], "privacy": ["p"], "refund": []}}
+    assert gates.evaluate_gate_4(no_refund).recommendation == "repeat"
+    assert gates.evaluate_gate_4({**full, "pricing": {"price": "250", "basis": []}}).recommendation == "repeat"
+
+
+def test_gate_5_needs_drafts_and_a_passing_payment_test():
+    launch = {"store_page": {"title": "Kit"}, "launch_posts": [{"text": "p"}]}
+    assert gates.evaluate_gate_5(launch, True).recommendation == "go"
+    assert gates.evaluate_gate_5(launch, False, "1 step(s) failed").recommendation == "repeat"
+
+
+def test_gate_6_follows_the_memo_rules():
+    r = gates.evaluate_gate_6({"recommendation": "repeat", "why": "MOCKED data", "mocked": True})
+    assert r.recommendation == "repeat" and any("MOCKED" in x for x in r.reasons)
+    assert gates.evaluate_gate_6({"recommendation": "stop", "why": "every target missed"}).recommendation == "stop"

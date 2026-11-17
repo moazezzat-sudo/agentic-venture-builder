@@ -286,5 +286,152 @@ def evaluate_gate_1(
 
 __all__ = [
     "load_rubric", "validate_rubric", "criteria_names", "check_scores", "weighted_total",
-    "outcome_from_total", "claim_stats", "evaluate_gate_1", "RUBRIC_PATH",
+    "outcome_from_total", "claim_stats", "evaluate_gate_1", "RUBRIC_PATH", "source_key",
+    "PHASE_GATES", "evaluate_gate_2", "evaluate_gate_3_plan", "evaluate_gate_3", "evaluate_gate_4",
+    "evaluate_gate_5", "evaluate_gate_6",
 ]
+
+
+# ================================================================ Phases 2-6 gates
+# PLAN.md section 4. Each gate checks the phase's draft against the target written before the phase,
+# in plain Python. Guardrail hits left in a draft (after the agent's one rewrite) -> repeat.
+
+PHASE_GATES: dict[str, dict[str, Any]] = {
+    "gate_2": {"phase": 2, "target": "The founder sets a waitlist target before the test and enters the real sign-up count. "
+                                     "Stop when the real count is far below the target (under a quarter of it)."},
+    "gate_3_plan": {"phase": 3, "target": "A build plan the founder accepts: stack, database, flows and MVP features that "
+                                          "test the riskiest assumption; no guardrail hits."},
+    "gate_3": {"phase": 3, "target": "Smoke tests pass and user docs exist: the files exist and are not empty, the HTML "
+                                     "parses, and every text passes the guardrails."},
+    "gate_4": {"phase": 4, "target": "The price has a stated basis; terms, privacy and refund drafts exist; no prohibited claims."},
+    "gate_5": {"phase": 5, "target": "The founder approves each post and the store page; the MOCKED delivery test passes."},
+    "gate_6": {"phase": 6, "target": "A persevere-or-pivot memo backed by the logged metrics, against the targets set at Gate 2."},
+}
+FAR_BELOW_SHARE = 0.25  # "Real count far below target (e.g. 12 of 100)" -> stop. Our choice for "far".
+
+
+def _phase_result(gate: str, outcome: Outcome, reasons: list[str], summary: str) -> GateResult:
+    spec = PHASE_GATES[gate]
+    return GateResult(phase=spec["phase"], gate=gate, recommendation=outcome, reasons=reasons,
+                      target=spec["target"], evidence_summary=summary)
+
+
+def _draft_violations(draft: Mapping[str, Any]) -> list[str]:
+    return [f"{v.get('rule')}: \"{v.get('excerpt', '')}\"" for v in (draft.get("violations") or []) if isinstance(v, Mapping)]
+
+
+def _with_violations(outcome: Outcome, reasons: list[str], draft: Mapping[str, Any]) -> tuple[Outcome, list[str]]:
+    hits = _draft_violations(draft)
+    if hits:
+        reasons = [*reasons, *(f"Guardrail (draft): {h}" for h in hits)]
+        if outcome != "stop":
+            outcome = "repeat"
+            reasons.append("Held at repeat: the draft still breaks a guardrail after one rewrite.")
+    return outcome, reasons
+
+
+def _count(value: Any) -> Optional[int]:
+    try:
+        number = int(str(value).strip().replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
+
+
+def evaluate_gate_2(draft: Mapping[str, Any], targets: Mapping[str, Any]) -> GateResult:
+    """Validate: the founder's waitlist target against the real count. No real count -> repeat, never invented."""
+    target, count = _count(targets.get("waitlist_target")), _count(targets.get("waitlist_count"))
+    if not draft:
+        return _phase_result("gate_2", "repeat", ["The Phase 2 draft is missing."], "No draft.")
+    outcome: Outcome
+    if not target:
+        outcome, reasons = "repeat", ["No waitlist target was set before the test. Set one, then run the waitlist test."]
+    elif count is None:
+        outcome, reasons = "repeat", [f"Waitlist target {target}; no real sign-up count yet. Run the test and enter "
+                                      "the real count; nothing is estimated for you."]
+    elif count < FAR_BELOW_SHARE * target:
+        outcome, reasons = "stop", [f"{count} real sign-ups against a target of {target}: far below the target."]
+    elif count < target:
+        outcome, reasons = "repeat", [f"{count} real sign-ups against a target of {target}: missed by a little."]
+    else:
+        outcome, reasons = "go", [f"{count} real sign-ups against a target of {target}: target met."]
+    outcome, reasons = _with_violations(outcome, reasons, draft)
+    summary = (f"Waitlist target {target if target else 'not set'}; "
+               f"real count {count if count is not None else 'not entered'}.")
+    return _phase_result("gate_2", outcome, reasons, summary)
+
+
+def evaluate_gate_3_plan(draft: Mapping[str, Any]) -> GateResult:
+    missing = [k for k in ("stack", "mvp_features") if not draft.get(k)]
+    outcome: Outcome
+    if not draft or missing:
+        outcome, reasons = "repeat", [f"The build plan is missing: {', '.join(missing) or 'everything'}."]
+    else:
+        outcome, reasons = "go", [f"Build plan with {len(draft['mvp_features'])} MVP feature(s) for the founder to accept."]
+    outcome, reasons = _with_violations(outcome, reasons, draft)
+    return _phase_result("gate_3_plan", outcome, reasons, "Plan only: nothing is built until the founder accepts it.")
+
+
+def evaluate_gate_3(draft: Mapping[str, Any]) -> GateResult:
+    """Build: phase3_build's own plain-Python checks (files exist, HTML parses, guardrails pass)."""
+    if not draft:
+        return _phase_result("gate_3", "repeat", ["The build did not run."], "No build.")
+    failures = [str(f) for f in (draft.get("checks") or [])]
+    outcome: Outcome = "repeat" if failures or draft.get("recommendation") == "repeat" else "go"
+    reasons = [f"Check failed: {f}" for f in failures] or ["All Gate 3 checks passed: files exist, HTML parses, guardrails pass."]
+    outcome, reasons = _with_violations(outcome, reasons, draft)
+    return _phase_result("gate_3", outcome, reasons, f"{len(failures)} failed check(s).")
+
+
+def evaluate_gate_4(draft: Mapping[str, Any]) -> GateResult:
+    pricing, policies = draft.get("pricing") or {}, draft.get("policies") or {}
+    problems = []
+    if not str(pricing.get("price", "")).strip():
+        problems.append("no price")
+    if not pricing.get("basis"):
+        problems.append("the price has no stated basis")
+    problems += [f"no {name} policy draft" for name in ("terms", "privacy", "refund") if not policies.get(name)]
+    outcome: Outcome
+    if problems:
+        outcome, reasons = "repeat", [f"Missing: {', '.join(problems)}."]
+    else:
+        outcome = "go"
+        reasons = ["Price with a stated basis; terms, privacy and refund drafts exist (drafts, not legal advice)."]
+        if not draft.get("price_has_sourced_basis"):
+            reasons.append("The price basis is an ASSUMPTION, not a sourced figure.")
+    outcome, reasons = _with_violations(outcome, reasons, draft)
+    price = f"{pricing.get('price') or 'none'} {pricing.get('currency') or ''}".strip()
+    return _phase_result("gate_4", outcome, reasons, f"Price: {price}.")
+
+
+def evaluate_gate_5(draft: Mapping[str, Any], payment_test_passed: bool, payment_test_note: str = "") -> GateResult:
+    problems = []
+    if not (draft.get("store_page") or {}).get("title"):
+        problems.append("no store-page draft")
+    if not draft.get("launch_posts"):
+        problems.append("no launch-post drafts")
+    if not payment_test_passed:
+        problems.append("the MOCKED payment and delivery test failed" + (f" ({payment_test_note})" if payment_test_note else ""))
+    outcome: Outcome
+    if problems:
+        outcome, reasons = "repeat", [f"Not ready: {', '.join(problems)}."]
+    else:
+        outcome = "go"
+        reasons = ["Store page and launch posts drafted; nothing is posted until the founder approves and posts it.",
+                   "The MOCKED payment, delivery, refund and reconciliation test passed."]
+    outcome, reasons = _with_violations(outcome, reasons, draft)
+    return _phase_result("gate_5", outcome, reasons, f"{len(draft.get('launch_posts') or [])} post draft(s); payments MOCKED.")
+
+
+def evaluate_gate_6(draft: Mapping[str, Any]) -> GateResult:
+    """Operate: phase6_memo's plain-Python recommendation (MOCKED data -> repeat; targets missed -> stop/pivot)."""
+    if not draft:
+        return _phase_result("gate_6", "repeat", ["The memo did not run."], "No memo.")
+    rec = draft.get("recommendation")
+    outcome: Outcome = rec if rec in ("go", "repeat", "pivot", "stop") else "repeat"
+    reasons = [str(draft["why"])] if draft.get("why") else ["No reason given."]
+    if draft.get("mocked"):
+        reasons.append("The sales data is MOCKED: there are no real customers yet.")
+    outcome, reasons = _with_violations(outcome, reasons, draft)
+    summary = "Metrics from MOCKED sales." if draft.get("mocked") else "Metrics from the store."
+    return _phase_result("gate_6", outcome, reasons, summary)
