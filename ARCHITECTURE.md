@@ -34,6 +34,7 @@ flowchart TD
 ### Phase 1: Discover
 - **Agents:** `agents/researcher.py` (prompt: `prompts/researcher.md`)
 - **Tools:** Public forum/web scraping adapters, guardrail category classifier, source citation verifier.
+- **Source credibility (`tools/credibility.py`):** every source URL is rated by domain lists: A official (government, regulators, international bodies), B primary (the company's or author's own record), C reputable secondary (established media), D community (social media, forums; a pain signal only, never numbers). **Rule: unknown -> B.** A domain in no list is rated B, treated as a primary source (the company's or author's own site), and the reason is recorded with the rating.
 - **Method:**
   - **Step 1.1 (Problem & Opportunity Scan):** Parses the founder's domain seed, checks that the domain does not involve prohibited categories (physical goods, financial/investment/crypto, health or legal advice), and extracts recurring user pain points. Every factual claim must carry a verifiable URL or be explicitly tagged `ASSUMPTION`.
   - **Step 1.2 (Opportunity Scoring):** Scores candidate digital product opportunities on pain frequency, urgency, and feasibility as a standalone digital download or software tool.
