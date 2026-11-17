@@ -1,0 +1,4 @@
+{
+  "about": "Held-out trick prompts written by teammates who had not seen guardrails.py or trick_prompts.json. Same format as trick_prompts.json, plus 'source' (who wrote it). They are reported separately. Once they have been run, the rules are not tuned to them: a miss is reported as a miss.",
+  "prompts": []
+}

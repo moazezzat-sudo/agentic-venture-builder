@@ -1,11 +1,17 @@
-"""Run every prompt in evals/trick_prompts.json through the guardrails and write evals/guardrail_results.md.
+"""Run the guardrail evals and write evals/guardrail_results.md.
 
     python evals/run_guardrails.py               # keyword rules + model check (if a model is reachable)
     python evals/run_guardrails.py --rules-only  # keyword rules only, no model calls
 
+Four groups, reported separately:
+  - trick prompts we wrote ourselves (evals/trick_prompts.json, IDs T..)
+  - honest control prompts (same file, "control": true): must not be blocked
+  - held-out trick prompts written by teammates who hadn't seen the rules (evals/heldout_prompts.json)
+  - legitimate briefs (evals/legit_briefs.json): the false-positive rate
+
 Each prompt goes through check_category (as a founder brief) and check_text (as a request).
-A trick prompt passes when the guard it names in "expect" fires. A control prompt passes when
-nothing fires. The results file records, per prompt, whether the model check actually ran.
+A trick prompt passes when the guard named in "expect" fires. The results file records which
+checks actually ran, and per item whether the model check ran.
 """
 
 from __future__ import annotations
@@ -23,15 +29,22 @@ sys.path.insert(0, str(ROOT))
 import guardrails  # noqa: E402
 from schemas import utc_now  # noqa: E402
 
-PROMPTS_PATH = ROOT / "evals" / "trick_prompts.json"
-RESULTS_PATH = ROOT / "evals" / "guardrail_results.md"
+EVALS = ROOT / "evals"
+PROMPTS_PATH = EVALS / "trick_prompts.json"
+HELDOUT_PATH = EVALS / "heldout_prompts.json"
+LEGIT_PATH = EVALS / "legit_briefs.json"
+RESULTS_PATH = EVALS / "guardrail_results.md"
 # Model calls made by the eval are logged here, not in the demo run's decision_log.json.
-EVAL_LOG_PATH = ROOT / "evals" / "guardrail_eval_log.json"
+EVAL_LOG_PATH = EVALS / "guardrail_eval_log.json"
 
 
-def _model_status(reason: str, rule_hit: bool, use_model: bool) -> str:
-    if rule_hit:
-        return "not needed (rule hit)"
+def _load(path: Path, key: str) -> list[dict[str, Any]]:
+    return json.loads(path.read_text(encoding="utf-8"))[key] if path.exists() else []
+
+
+def _model_status(allowed: bool, reason: str, use_model: bool) -> str:
+    if not allowed and "Rule matched" in reason:
+        return "not needed (strong rule)"
     if not use_model:
         return "off (--rules-only)"
     if "could not run" in reason:
@@ -39,77 +52,133 @@ def _model_status(reason: str, rule_hit: bool, use_model: bool) -> str:
     return "ran"
 
 
-def evaluate(item: dict[str, Any], use_model: bool, llm: Any = None, log_path: Optional[Path] = None) -> dict[str, Any]:
-    prompt = item["prompt"]
-    allowed, category, reason = guardrails.check_category(
-        {"idea": prompt}, use_model=use_model, llm=llm, log_path=log_path
-    )
-    violations = guardrails.check_text(prompt)
-    fired_rules = sorted({v["rule"] for v in violations})
-    blocked = (not allowed) or bool(violations)
+def check(brief: dict[str, Any], text: str, use_model: bool, llm: Any) -> dict[str, Any]:
+    allowed, category, reason = guardrails.check_category(brief, use_model=use_model, llm=llm, log_path=EVAL_LOG_PATH)
+    violations = guardrails.check_text(text)
+    return {
+        "category": category,
+        "rules": sorted({v["rule"] for v in violations}),
+        "blocked": (not allowed) or bool(violations),
+        "model_check": _model_status(allowed, reason, use_model),
+        "category_reason": reason,
+    }
 
+
+def evaluate(item: dict[str, Any], use_model: bool, llm: Any = None) -> dict[str, Any]:
+    """One trick or control prompt."""
+    r = check({"idea": item["prompt"]}, item["prompt"], use_model, llm)
     expect = item.get("expect", {})
     if item.get("control"):
-        passed = not blocked
+        passed = not r["blocked"]
     elif "rule" in expect:
-        passed = expect["rule"] in fired_rules
+        passed = expect["rule"] in r["rules"]
     else:
-        passed = category == expect.get("category")
-
+        passed = r["category"] == expect.get("category")
     return {
+        **r,
         "id": item["id"],
         "control": bool(item.get("control")),
-        "prompt": prompt,
+        "source": item.get("source", ""),
+        "prompt": item["prompt"],
         "expected": expect.get("rule") or expect.get("category") or "not blocked",
-        "category": category,
-        "rules": fired_rules,
-        "blocked": blocked,
         "passed": passed,
-        "model_check": _model_status(reason, rule_hit=(not allowed and "Rule matched" in reason), use_model=use_model),
-        "reason": reason if not allowed else (violations[0]["reason"] if violations else ""),
     }
+
+
+def evaluate_brief(item: dict[str, Any], use_model: bool, llm: Any = None) -> dict[str, Any]:
+    """One legitimate brief: passes when nothing blocks it."""
+    brief = item["brief"]
+    r = check(brief, guardrails.brief_text(brief), use_model, llm)
+    return {**r, "id": item["id"], "prompt": brief["idea"], "passed": not r["blocked"]}
 
 
 def _cell(text: str) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
-def render(results: list[dict[str, Any]], use_model: bool, seconds: float) -> str:
-    tricks = [r for r in results if not r["control"]]
-    controls = [r for r in results if r["control"]]
-    caught = sum(r["passed"] for r in tricks)
+def _table(rows: list[dict[str, Any]], with_source: bool = False) -> list[str]:
+    head = "| ID | " + ("Source | " if with_source else "") + "Prompt | Expected | Category | Text rules fired | Model check | Result |"
+    lines = [head, "|" + "---|" * (head.count("|") - 1)]
+    for r in rows:
+        src = f"{_cell(r['source'])} | " if with_source else ""
+        lines.append(
+            f"| {r['id']} | {src}{_cell(r['prompt'])} | {r['expected']} | {r['category']} | "
+            f"{', '.join(r['rules']) or '-'} | {r['model_check']} | {'PASS' if r['passed'] else '**FAIL**'} |"
+        )
+    return lines
+
+
+def render(own: list, controls: list, heldout: list, legit: list, checks_ran: str, seconds: float, rules_only: bool) -> str:
+    caught = sum(r["passed"] for r in own)
     clean = sum(r["passed"] for r in controls)
-    model_states = sorted({r["model_check"] for r in results})
+    blocked_legit = [r for r in legit if not r["passed"]]
+    fp_rate = len(blocked_legit) / len(legit) if legit else 0.0
     lines = [
         "# Guardrail eval results",
         "",
-        f"Generated by `python evals/run_guardrails.py{'' if use_model else ' --rules-only'}` on {utc_now()} "
-        f"from `evals/trick_prompts.json`, in {seconds:.1f} s.",
+        f"Generated by `python evals/run_guardrails.py{' --rules-only' if rules_only else ''}` on {utc_now()} in {seconds:.1f} s.",
         "",
-        f"- **Trick prompts caught by the expected guard: {caught}/{len(tricks)}**",
-        f"- **Honest control prompts left unblocked: {clean}/{len(controls)}**",
-        f"- Model check states seen: {', '.join(model_states)}",
+        f"**Checks that ran:** {checks_ran}",
+        "",
+        f"- **{caught}/{len(own)} trick prompts caught, on prompts we wrote ourselves** (`evals/trick_prompts.json`). "
+        "The same person wrote these prompts and the rules, so this overstates how well the guardrails do on prompts nobody has seen.",
+        (
+            f"- **Held-out: {sum(r['passed'] for r in heldout)}/{len(heldout)} caught** on prompts written by teammates "
+            "who hadn't seen the rules (`evals/heldout_prompts.json`)."
+            if heldout else
+            "- **Held-out: none received yet.** `evals/heldout_prompts.json` is empty, so there is no result on unseen prompts."
+        ),
+        f"- **{clean}/{len(controls)} honest control prompts left unblocked.**",
+        f"- **False-positive rate on legitimate briefs: {len(blocked_legit)}/{len(legit)} blocked ({fp_rate:.0%})** (`evals/legit_briefs.json`).",
         "",
         "Each prompt goes through `check_category` (as a founder brief) and `check_text` (as a request). "
-        "A trick prompt passes when the guard named in *Expected* fires; a control passes when nothing fires.",
+        "A trick prompt passes when the guard named in *Expected* fires; a control or legitimate brief passes when nothing blocks it. "
+        "An ambiguous keyword (crypto, supplements, handmade ...) is blocked unless the model check runs and clears it.",
         "",
-        "| ID | Prompt | Expected | Category | Text rules fired | Model check | Result |",
+        "## Trick prompts we wrote ourselves",
+        "",
+        *_table(own),
+        "",
+        "## Held-out trick prompts",
+        "",
+        *(_table(heldout, with_source=True) if heldout else ["None received yet."]),
+        "",
+        "## Honest control prompts",
+        "",
+        *_table(controls),
+        "",
+        "## False positives on legitimate briefs",
+        "",
+        "| ID | Idea | Category | Text rules fired | Model check | Result | Reason |",
         "|---|---|---|---|---|---|---|",
     ]
-    for r in results:
+    for r in legit:
         lines.append(
-            f"| {r['id']} | {_cell(r['prompt'])} | {r['expected']} | {r['category']} | "
-            f"{', '.join(r['rules']) or '-'} | {r['model_check']} | {'PASS' if r['passed'] else '**FAIL**'} |"
+            f"| {r['id']} | {_cell(r['prompt'])} | {r['category']} | {', '.join(r['rules']) or '-'} | "
+            f"{r['model_check']} | {'allowed' if r['passed'] else '**blocked**'} | {_cell(r['category_reason'])} |"
         )
-    misses = [r for r in results if not r["passed"]]
+    misses = [r for r in own + heldout + controls if not r["passed"]]
     lines += ["", "## Misses", ""]
     if misses:
         for r in misses:
             what = "was blocked" if r["control"] else f"was not caught as {r['expected']}"
             lines.append(f"- {r['id']} {what}. Category: {r['category']}; text rules: {', '.join(r['rules']) or 'none'}.")
     else:
-        lines.append("None in this run.")
+        lines.append("No trick prompt missed and no control blocked in this run.")
     return "\n".join(lines) + "\n"
+
+
+def _get_model() -> tuple[Any, str]:
+    """(llm, description) or (None, why not). Probes once, so an unreachable model doesn't slow every prompt."""
+    try:
+        from config import settings
+        from llm import get_llm
+
+        llm = get_llm(role="fast")
+        llm.invoke("Reply with OK")
+        return llm, f"{settings.provider} `{settings.model_name('fast')}`"
+    except Exception as exc:
+        return None, f"unavailable ({type(exc).__name__})"
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -118,30 +187,31 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--out", type=Path, default=RESULTS_PATH)
     args = parser.parse_args(argv)
 
-    items = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))["prompts"]
-    use_model = not args.rules_only
-    llm = None
+    llm, model_desc = (None, "off (--rules-only)") if args.rules_only else _get_model()
+    use_model = llm is not None
     if use_model:
-        try:
-            from llm import get_llm
+        checks_ran = f"keyword rules (`check_text`, `check_category`) + model check ({model_desc})."
+    else:
+        checks_ran = f"keyword rules only (`check_text`, `check_category`); model check {model_desc}."
+    print("Checks:", checks_ran)
 
-            llm = get_llm(role="fast")
-            llm.invoke("Reply with OK")  # probe once, so an unreachable model doesn't slow every prompt
-        except Exception as exc:  # no provider reachable: every row will say "unavailable"
-            llm = None
-            print(f"Model unavailable ({type(exc).__name__}); category checks fall back to rules.")
+    items = _load(PROMPTS_PATH, "prompts")
     start = time.perf_counter()
-    results = [
-        evaluate(item, use_model=use_model and llm is not None, llm=llm, log_path=EVAL_LOG_PATH) for item in items
-    ]
-    if use_model and llm is None:  # record honestly that the model check was meant to run but couldn't
-        for r in results:
+    own = [evaluate(i, use_model, llm) for i in items if not i.get("control")]
+    controls = [evaluate(i, use_model, llm) for i in items if i.get("control")]
+    heldout = [evaluate(i, use_model, llm) for i in _load(HELDOUT_PATH, "prompts")]
+    legit = [evaluate_brief(i, use_model, llm) for i in _load(LEGIT_PATH, "briefs")]
+    if not args.rules_only and not use_model:  # say "unavailable", not "off", when the model was meant to run
+        for r in own + controls + heldout + legit:
             if r["model_check"] == "off (--rules-only)":
                 r["model_check"] = "unavailable"
-    text = render(results, use_model, time.perf_counter() - start)
-    args.out.write_text(text, encoding="utf-8")
-    failed = [r["id"] for r in results if not r["passed"]]
-    print(f"Wrote {args.out.relative_to(ROOT) if args.out.is_relative_to(ROOT) else args.out}. Failed: {failed or 'none'}")
+
+    args.out.write_text(
+        render(own, controls, heldout, legit, checks_ran, time.perf_counter() - start, args.rules_only), encoding="utf-8"
+    )
+    failed = [r["id"] for r in own + heldout + controls if not r["passed"]]
+    fps = [r["id"] for r in legit if not r["passed"]]
+    print(f"Wrote {args.out}. Missed or wrongly blocked: {failed or 'none'}. False positives: {fps or 'none'}")
     return 1 if failed else 0
 
 
