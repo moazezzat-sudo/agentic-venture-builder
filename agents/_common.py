@@ -63,6 +63,8 @@ def invoke_model(
 def parse_json(text: str) -> dict[str, Any]:
     """Take the first JSON object out of a model reply. Returns {} if there is none."""
     text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.S)
+    # qwen3 sometimes leaves a lone closing tag (thinking cut off) or echoes its switch.
+    text = text.split("</think>")[-1].replace("/no_think", "").replace("/think", "")
     text = re.sub(r"```(?:json)?", "", text)
     start = text.find("{")
     while start != -1:
@@ -184,5 +186,6 @@ def claims_markdown(claims: Iterable[dict[str, Any]]) -> str:
             tag = f"our evidence: {c.get('evidence_ref')}"
         else:
             tag = "ASSUMPTION"
-        lines.append(f"{i}. {c['text']} ({c.get('area') or 'general'}; {tag})")
+        label = f"[{c['id']}{' · ' + c['kind'] if c.get('kind') else ''}] " if c.get("id") else ""
+        lines.append(f"{i}. {label}{c['text']} ({c.get('area') or 'general'}; {tag})")
     return "\n".join(lines) if lines else "_No claims._"

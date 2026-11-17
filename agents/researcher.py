@@ -90,11 +90,17 @@ def web_answered(results: list[dict[str, Any]]) -> bool:
     return any(not str(r.get("engine") or "").lower().startswith(FALLBACK_ENGINES) for r in results)
 
 
-def find_sources(query: str, web: Optional[list[bool]] = None) -> list[dict[str, Any]]:
+def find_sources(query: str, web: Optional[list[bool]] = None,
+                 dropped: Optional[list[dict[str, str]]] = None) -> list[dict[str, Any]]:
     """Search and rate. Returns [{i, title, url, snippet, tier}]. Skips ads, redirects, results unrelated
-    to the query, and non-http(s) URLs. If `web` is a list, appends whether a web engine answered."""
+    to the query, and non-http(s) URLs. If `web` is a list, appends whether a web engine answered;
+    if `dropped` is a list, appends {url, reason} for every result skipped here."""
     from tools.credibility import rate
     from tools.search import search
+
+    def drop(url: str, reason: str) -> None:
+        if dropped is not None:
+            dropped.append({"url": url, "reason": reason})
 
     sources = []
     results = search(plain_query(query), max_results=MAX_RESULTS)[:MAX_RESULTS]
@@ -102,11 +108,16 @@ def find_sources(query: str, web: Optional[list[bool]] = None) -> list[dict[str,
         web.append(web_answered(results))
     for r in results:
         url = str(r.get("url", ""))
-        if AD_URL.match(url) or not relevant(query, r):
+        if AD_URL.match(url):
+            drop(url, "advert or redirect link")
+            continue
+        if not relevant(query, r):
+            drop(url, "keyword score 0: shares no word with the query")
             continue
         try:
             tier = rate(url)
         except ValueError:
+            drop(url, "not an http(s) link")
             continue
         sources.append({"i": len(sources), "title": cut(r.get("title"), 120), "url": url,
                         "snippet": cut(r.get("snippet"), SNIPPET_CHARS), "tier": tier})
@@ -234,3 +245,154 @@ def node(state: dict[str, Any]) -> dict[str, Any]:
     ), status="STUBBED" if stubbed else "Working")
     gaps = [] if web_ok else [{"round": round_no, "area": area["name"], "focus": area.get("focus", "problem")}]
     return {"claims": claims, "tokens": usage["tokens"], "search_gaps": gaps}
+
+
+# ================================================================ evidence research (search plan)
+# One researcher per evidence type runs that type's queries from agents/search_plan.py. A result is
+# kept only if a plain keyword-overlap score passes AND the model flags it relevant; sources are
+# deduplicated (a site counts once, each forum thread once); every query logs what it kept and dropped.
+
+RELEVANCE_MIN = 0.25  # share of the idea's keywords a result must mention (our choice)
+MAX_EVIDENCE_CLAIMS = 6  # per evidence type
+
+
+def keyword_score(keywords_text: str, result: dict[str, Any]) -> float:
+    """Share of the idea's keywords (at most 4 counted) found in a result's title, snippet or URL."""
+    wanted = _words(keywords_text)
+    if not wanted:
+        return 1.0
+    found = _words(f"{result.get('title', '')} {result.get('snippet', '')} {result.get('url', '')}")
+    hits = len(wanted & found) or len({w[:5] for w in wanted} & {w[:5] for w in found})
+    return round(min(hits / min(len(wanted), 4), 1.0), 2)
+
+
+def evidence_claim(etype: str, text: str, source: dict[str, Any], round_no: int, query: str) -> dict[str, Any]:
+    from schemas import EVIDENCE_CRITERION
+
+    text, tier, criterion = cut(text, 200), source["tier"], EVIDENCE_CRITERION[etype]
+    if tier == "D":
+        text = f"Community signal: {text}"
+    if criterion in TIER_AB_ONLY and tier not in ("A", "B"):
+        text, criterion = f"{text} (tier {tier}: not usable as {TIER_AB_ONLY[criterion]})", None
+    claim = Claim(text=text, support="url", url=source["url"], tier=tier, area=criterion, agent="researcher")
+    return claim.model_dump() | {"kind": etype, "round": round_no, "query": query}
+
+
+def evidence_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Runs once per evidence type. state is the Send payload: {evidence_type, items, brief, round, run_id}."""
+    from agents.search_plan import keywords
+    from gates import source_key
+
+    etype, items, brief = state["evidence_type"], state["items"], state["brief"]
+    round_no, run_id = state.get("round", 1), state.get("run_id")
+    if etype == "market":
+        claims = [dict(c, kind="market") for c in country_facts(brief, round_no)]
+        log_action(agent="researcher", action="market_indicators", run_id=run_id, round=round_no, model=None,
+                   sources=[c["url"] for c in claims], evidence_type="market")
+        return {"claims": claims, "tokens": 0, "search_gaps": []}
+
+    k = keywords(brief)
+    kw_text = " ".join([k["customer"], k["problem"], k["solution"], k["activity"]])
+    web: list[bool] = []
+    seen: set[str] = set()
+    candidates: list[dict[str, Any]] = []
+    per_query: dict[str, dict[str, list]] = {}
+    for item in items:
+        q = item["query"]
+        log = per_query.setdefault(q, {"kept": [], "dropped": []})
+        site = re.search(r"site:(\S+)", q)
+        for s in find_sources(q, web, log["dropped"]):
+            score = keyword_score(kw_text, s)
+            if site and site.group(1).lower() not in s["url"].lower():
+                log["dropped"].append({"url": s["url"], "reason": "not from the site asked for"})
+            elif source_key(s["url"]) in seen:
+                log["dropped"].append({"url": s["url"], "reason": "same source already kept"})
+            elif score < RELEVANCE_MIN:
+                log["dropped"].append({"url": s["url"], "reason": f"keyword score {score} < {RELEVANCE_MIN}"})
+            else:
+                seen.add(source_key(s["url"]))
+                candidates.append({**s, "query": q, "score": score})
+
+    usage: dict[str, Any] = {"tokens": 0, "cost": 0.0, "model": None, "parsed": None, "retried": False}
+    verdicts: dict[int, dict[str, Any]] = {}
+    if candidates:
+        payload = {"evidence_type": etype,
+                   "idea": {"customer": k["customer"], "problem": k["problem"], "solution": k["solution"],
+                            "summary": cut(brief.get("discovery_summary") or brief.get("idea"), 300)},
+                   "results": [{"i": i, "tier": c["tier"], "title": c["title"], "snippet": c["snippet"]}
+                               for i, c in enumerate(candidates)]}
+        data, usage = ask_json("evidence", payload, role="fast", max_tokens=700, temperature=0)
+        for r in data.get("results") or []:
+            if isinstance(r, dict) and isinstance(r.get("i"), int) and not isinstance(r.get("i"), bool):
+                verdicts[r["i"]] = r
+
+    claims = []
+    for i, c in enumerate(candidates):
+        v = verdicts.get(i)
+        if usage.get("parsed") and (not v or v.get("relevant") is not True):
+            per_query[c["query"]]["dropped"].append({"url": c["url"], "reason": "the model judged it not relevant"})
+            continue
+        if not usage.get("parsed") and c["score"] < 0.5:  # no model verdict: only clear keyword matches
+            per_query[c["query"]]["dropped"].append({"url": c["url"], "reason": "no model verdict and keyword score < 0.5"})
+            continue
+        if len(claims) >= MAX_EVIDENCE_CLAIMS:
+            per_query[c["query"]]["dropped"].append({"url": c["url"], "reason": "evidence type already has enough sources"})
+            continue
+        text = (v or {}).get("claim") or c["title"]
+        claims.append(evidence_claim(etype, str(text), c, round_no, c["query"]))
+        per_query[c["query"]]["kept"].append(c["url"])
+
+    # Anything the model states for a result number that doesn't exist has no source: an ASSUMPTION,
+    # kept visible but never counted as evidence.
+    for i, v in verdicts.items():
+        if not 0 <= i < len(candidates) and v.get("relevant") is True and str(v.get("claim", "")).strip():
+            claims.append(Claim(text=cut(v["claim"], 200), support="ASSUMPTION", agent="researcher").model_dump()
+                          | {"kind": etype, "round": round_no, "query": None})
+
+    for q, log in per_query.items():
+        log_action(agent="researcher", action="search_query", run_id=run_id, round=round_no, model=None,
+                   evidence_type=etype, query=q, sources=log["kept"], kept=len(log["kept"]),
+                   dropped=log["dropped"])
+    web_ok = any(web)
+    log_action(agent="researcher", action="judge_relevance", run_id=run_id, round=round_no, evidence_type=etype,
+               sources=[c["url"] for c in claims], candidates=len(candidates), kept=len(claims),
+               web_search_ok=web_ok, **model_fields(usage))
+    gaps = [] if web_ok else [{"round": round_no, "area": f"{etype} searches", "focus": etype}]
+    return {"claims": claims, "tokens": usage.get("tokens", 0), "search_gaps": gaps}
+
+
+def fan_out_plan(state: dict[str, Any]):
+    """One researcher per evidence type in the plan, in parallel."""
+    from langgraph.types import Send
+
+    by_type: dict[str, list[dict[str, Any]]] = {}
+    for item in state.get("search_plan") or []:
+        by_type.setdefault(item["evidence_type"], []).append(item)
+    return [Send("researcher", {"evidence_type": t, "items": items, "brief": state["brief"],
+                                "round": state.get("round", 1), "run_id": state.get("run_id")})
+            for t, items in by_type.items()]
+
+
+def summary_node(state: dict[str, Any]) -> dict[str, Any]:
+    """After the parallel researchers: write the claims grouped by evidence type."""
+    from agents.scorer import current_claims
+    from schemas import EVIDENCE_TYPES
+
+    claims = [c for c in current_claims(state) if c.get("round", 1) == state.get("round", 1)]
+    order = {t: i for i, t in enumerate(EVIDENCE_TYPES)}
+    claims.sort(key=lambda c: (order.get(c.get("kind"), 99), int(str(c.get("id", "C0"))[1:] or 0)))
+    counts = {t: sum(1 for c in claims if c.get("kind") == t) for t in EVIDENCE_TYPES}
+    rows = "\n".join(f"| {t} | {n} |" for t, n in counts.items())
+    gaps = [g["focus"] for g in state.get("search_gaps") or [] if g.get("round") == state.get("round", 1)]
+    log_action(agent="researcher", action="research_summary", run_id=state.get("run_id"), model=None,
+               round=state.get("round", 1), claims=len(claims), by_type=counts, search_gaps=gaps)
+    write_output(1, 3, "research", (
+        f"# Phase 1, step 3: research, claims by evidence type (round {state.get('round', 1)})\n\n"
+        "Each kept search result is one claim with its id, its source URL and the source's tier. Results that "
+        "missed the keywords, repeated a source or that the model judged off-topic were dropped (see the "
+        "search_query entries in decision_log.json).\n\n"
+        "| Evidence type | Claims |\n|---|---|\n" + rows + "\n\n"
+        + (f"Web search could not be reached for: {', '.join(gaps)}.\n\n" if gaps else "")
+        + "## Claims\n\n" + claims_markdown(claims) + "\n"
+    ))
+    return {}
