@@ -199,9 +199,95 @@ def run_usage(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
     return {"tokens": tokens, "cost": round(cost, 6), "models": sorted(models), "entries": len(entries)}
 
 
+# Approximate download sizes of the Ollama models we suggest (shown while one downloads).
+MODEL_SIZES = {
+    "qwen3:8b": "about 5 GB",
+    "qwen3:4b": "about 2.5 GB",
+    "qwen3:1.7b": "about 1.4 GB",
+    "qwen3:14b": "about 9 GB",
+}
+
+
+def _tag(name: str) -> str:
+    """Ollama lists an untagged model as name:latest."""
+    name = str(name).strip()
+    return name if ":" in name else f"{name}:latest"
+
+
+def _bundled_ollama(base_url: str) -> bool:
+    """True when the app talks to the ollama service from docker-compose.yml."""
+    from urllib.parse import urlsplit
+
+    return (urlsplit(base_url).hostname or "") == "ollama"
+
+
+def model_status(cfg: Any = None, get: Any = None) -> dict[str, Any]:
+    """Is the model ready? {"state": ready | downloading | unreachable, "message": str, "missing": [...]}.
+
+    Only Ollama is checked (a quick GET /api/tags); Groq and other hosted providers count as ready.
+    """
+    cfg = cfg or settings
+    if cfg.provider != "ollama":
+        return {"state": "ready", "message": "", "missing": []}
+    base = cfg.ollama_base_url.rstrip("/")
+    wanted = list(dict.fromkeys([cfg.model_name("smart"), cfg.model_name("fast")]))
+    bundled = _bundled_ollama(base)
+    try:
+        if get is None:
+            import requests
+
+            get = requests.get
+        response = get(f"{base}/api/tags", timeout=3)
+        response.raise_for_status()
+        have = {_tag(m.get("name", "")) for m in response.json().get("models", [])}
+    except Exception:
+        if bundled:
+            message = ("The local model server is not answering yet: it is starting, or the ollama service is stopped. "
+                       "Start it with: `docker compose up -d ollama model-pull`. "
+                       "Or put a free GROQ_API_KEY in .env to run without a local model.")
+        else:
+            message = (f"No Ollama is answering at {base}. Start Ollama with `{wanted[0]}` pulled, "
+                       "or put a free GROQ_API_KEY in .env to run without a local model.")
+        return {"state": "unreachable", "message": message, "missing": wanted}
+
+    missing = [m for m in wanted if _tag(m) not in have]
+    if not missing:
+        return {"state": "ready", "message": "", "missing": []}
+    sizes = ", ".join(f"`{m}` ({MODEL_SIZES.get(_tag(m), 'several GB')})" for m in missing)
+    if bundled:
+        message = (f"Local model still downloading: {sizes}. The app is ready as soon as it is there. "
+                   "Check progress with: `docker compose logs -f model-pull`. "
+                   "Or put a free GROQ_API_KEY in .env to start now.")
+    else:
+        message = (f"Your Ollama does not have {sizes} yet. Download it with: "
+                   + " && ".join(f"`ollama pull {m}`" for m in missing)
+                   + ". Or put a free GROQ_API_KEY in .env to start now.")
+    return {"state": "downloading", "message": message, "missing": missing}
+
+
+def cached_model_status(store: Any, max_age: float = 10.0, check: Any = None) -> dict[str, Any]:
+    """model_status(), remembered in store (the session) for max_age seconds.
+
+    A check against a stopped server takes about 2 s on Windows; without this, every rerun
+    and the 15-second re-check would each pay it.
+    """
+    import time
+
+    now = time.monotonic()
+    cached = store.get("model_status_cache")
+    if cached and now - cached[0] < max_age:
+        return cached[1]
+    status = (check or model_status)()
+    store["model_status_cache"] = (now, status)
+    return status
+
+
 def model_hint(exc: BaseException) -> str:
-    """A plain next step when the failure is the model being unreachable."""
+    """A plain next step when the failure is the model being unreachable or not downloaded yet."""
     text = f"{type(exc).__name__} {exc}".lower()
+    if "not found" in text and ("pull" in text or "model" in text):
+        return (" The local model is not downloaded yet. Check progress with: `docker compose logs -f model-pull`, "
+                "then use Retry.")
     if not any(s in text for s in ("connecterror", "connection", "refused", "11434")):
         return ""
     if settings.provider == "ollama":
@@ -370,12 +456,14 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
                "The system recommends; you decide at every gate.")
     render_phase_strip(st, ss.result or {})
 
+    # The app never waits for the model: if it isn't ready yet, say why and how to check.
+    status = cached_model_status(ss)
+    model_ready = status["state"] == "ready"
+    if not model_ready:
+        render_model_wait(st, status)
+
     if ss.error:
         st.error(ss.error)
-        retry = getattr(_orchestrator(), "retry_run", None)
-        if ss.model_error and ss.run_id and callable(retry) and run_interrupted(ss.result):
-            if st.button("Retry the failed step", type="primary"):
-                call("Retrying", retry, ss.run_id)
 
     # ---- no run yet: the brief form
     if not ss.run_id:
@@ -393,7 +481,9 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
             has_team = c2.selectbox("Do you have a team?", ["Not said", "Yes", "No"])
             team_skills = st.text_input("Team members' skills (comma-separated)")
             st.caption("Only the idea is required. Leave a field blank and the intake agent will ask about it.")
-            submitted = st.form_submit_button("Start Phase 1", type="primary")
+            submitted = st.form_submit_button("Start Phase 1", type="primary", disabled=not model_ready)
+        if not model_ready:
+            st.caption("You can write your brief now; Start Phase 1 turns on when the model is ready.")
         if submitted:
             if not idea.strip():
                 st.error("Please describe your idea.")
@@ -454,8 +544,16 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
 
     # ---- a step failed mid-run
     elif run_interrupted(result):
-        st.warning("This run stopped part-way because a step failed (see the message above). "
-                   "Nothing was decided for you. Start a new brief, or retry when the model is reachable.")
+        st.warning("This run stopped part-way because a step failed. Nothing was decided for you. "
+                   "Retry runs only the failed step again; finished steps keep their results.")
+        retry = getattr(_orchestrator(), "retry_run", None)
+        if callable(retry):
+            if st.button("Retry the failed step", type="primary", disabled=not model_ready):
+                call("Retrying", retry, ss.run_id)
+            if not model_ready:
+                st.caption("Retry turns on when the model is ready.")
+        else:
+            st.caption("Start a new brief once the model is reachable.")
         render_evidence(st, state)
 
     # ---- finished
@@ -479,6 +577,23 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
 
     render_outputs(st)
     render_log(st, ss.run_id)
+
+
+def render_model_wait(st, status: dict[str, Any]) -> None:  # pragma: no cover - UI
+    """The model isn't ready: say why and how to check, offer Retry, and re-check on its own."""
+    st.warning(status["message"], icon="⏳" if status["state"] == "downloading" else "⚠️")
+    if st.button("Retry", key="model_retry", help="Check again whether the model is ready"):
+        st.session_state.pop("model_status_cache", None)  # Retry always checks afresh
+        st.rerun()
+
+    # Re-check every 15 s without a click; reload the whole page the moment the model is ready.
+    @st.fragment(run_every=15)
+    def recheck() -> None:
+        if cached_model_status(st.session_state)["state"] == "ready":
+            st.rerun(scope="app")
+        st.caption("Checking again every 15 seconds…")
+
+    recheck()
 
 
 def render_phase_strip(st, result: dict[str, Any]) -> None:  # pragma: no cover - UI

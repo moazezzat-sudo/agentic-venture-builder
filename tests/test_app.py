@@ -120,13 +120,28 @@ def by_label(widgets, prefix):
     return matches[0]
 
 
+def ready_settings(tmp_path, **kw):
+    """Test settings with a hosted provider, so the app counts the model as ready without any network."""
+    values = dict(llm_provider="groq", groq_api_key="test-placeholder-not-a-key",
+                  outputs_dir=tmp_path / "outputs", decision_log_path=tmp_path / "log.json")
+    values.update(kw)
+    return Settings(**values)
+
+
+def use_settings(monkeypatch, test_settings):
+    import config
+
+    # AppTest runs app.py as a new script that imports config.settings itself.
+    for module in (config, logger, app):
+        monkeypatch.setattr(module, "settings", test_settings)
+
+
 @pytest.fixture
 def at(tmp_path, monkeypatch):
     from streamlit.testing.v1 import AppTest
 
-    test_settings = Settings(outputs_dir=tmp_path / "outputs", decision_log_path=tmp_path / "log.json")
-    monkeypatch.setattr(logger, "settings", test_settings)
-    monkeypatch.setattr(app, "settings", test_settings)
+    test_settings = ready_settings(tmp_path)
+    use_settings(monkeypatch, test_settings)
     calls = []
     monkeypatch.setitem(sys.modules, "orchestrator", fake_orchestrator(calls))
     test = AppTest.from_file(str(ROOT_DIR / "app.py"), default_timeout=30)
@@ -205,9 +220,7 @@ def failing_orchestrator(calls, with_retry):
 def test_model_error_shows_the_reason_and_retry_only_when_available(tmp_path, monkeypatch, with_retry):
     from streamlit.testing.v1 import AppTest
 
-    test_settings = Settings(outputs_dir=tmp_path / "outputs", decision_log_path=tmp_path / "log.json")
-    monkeypatch.setattr(logger, "settings", test_settings)
-    monkeypatch.setattr(app, "settings", test_settings)
+    use_settings(monkeypatch, ready_settings(tmp_path))
     calls = []
     monkeypatch.setitem(sys.modules, "orchestrator", failing_orchestrator(calls, with_retry))
     at = AppTest.from_file(str(ROOT_DIR / "app.py"), default_timeout=30)
@@ -253,3 +266,110 @@ def test_run_interrupted_and_gate_labels():
     assert not app.run_interrupted({"current_phase": 2})
     assert app.gate_label("gate_1") == "Gate 1" and app.gate_label("gate_1_niche") == "Gate 1 (niche)"
     assert app.friendly("Founder chose stop at gate_1_niche.") == "Founder chose stop at Gate 1 (niche)."
+
+
+# ---------------------------------------------------------------- the app never waits for the model
+
+class FakeResponse:
+    def __init__(self, models):
+        self.models = models
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"models": [{"name": m} for m in self.models]}
+
+
+def local_settings(tmp_path, base="http://ollama:11434", model="qwen3:8b", fast=""):
+    return ready_settings(tmp_path, llm_provider="ollama", groq_api_key="", ollama_base_url=base,
+                          ollama_model=model, ollama_fast_model=fast)
+
+
+def test_model_status_hosted_provider_is_ready_without_a_request(tmp_path):
+    def no_network(*a, **k):
+        raise AssertionError("no request expected for a hosted provider")
+
+    assert app.model_status(ready_settings(tmp_path), get=no_network)["state"] == "ready"
+
+
+def test_model_status_ready_when_ollama_has_the_model(tmp_path):
+    cfg = local_settings(tmp_path)
+    assert app.model_status(cfg, get=lambda url, timeout: FakeResponse(["qwen3:8b"]))["state"] == "ready"
+    # an untagged model name matches Ollama's "name:latest"
+    cfg = local_settings(tmp_path, model="mymodel")
+    assert app.model_status(cfg, get=lambda url, timeout: FakeResponse(["mymodel:latest"]))["state"] == "ready"
+
+
+def test_model_status_downloading_names_the_model_size_and_the_log_command(tmp_path):
+    cfg = local_settings(tmp_path, fast="qwen3:4b")
+    status = app.model_status(cfg, get=lambda url, timeout: FakeResponse(["qwen3:4b"]))
+    assert status["state"] == "downloading" and status["missing"] == ["qwen3:8b"]
+    assert "still downloading" in status["message"] and "about 5 GB" in status["message"]
+    assert "docker compose logs -f model-pull" in status["message"] and "GROQ_API_KEY" in status["message"]
+
+
+def test_model_status_native_ollama_without_the_model_says_ollama_pull(tmp_path):
+    cfg = local_settings(tmp_path, base="http://host.docker.internal:11434", model="qwen3:4b")
+    status = app.model_status(cfg, get=lambda url, timeout: FakeResponse([]))
+    assert status["state"] == "downloading" and "ollama pull qwen3:4b" in status["message"]
+
+
+def test_model_status_unreachable_when_nothing_answers(tmp_path):
+    # A real request to a closed local port: refused at once, like a stopped ollama service.
+    status = app.model_status(local_settings(tmp_path, base="http://127.0.0.1:9"))
+    assert status["state"] == "unreachable" and "No Ollama is answering" in status["message"]
+
+
+def test_model_hint_for_a_model_that_is_not_pulled_yet():
+    hint = app.model_hint(RuntimeError('model "qwen3:8b" not found, try pulling it first (status code: 404)'))
+    assert "not downloaded yet" in hint and "Retry" in hint
+
+
+@pytest.mark.parametrize("state", ["stopped", "downloading"])
+def test_app_opens_at_once_with_a_clear_message_when_the_model_is_not_ready(tmp_path, monkeypatch, state):
+    import requests
+    from streamlit.testing.v1 import AppTest
+
+    use_settings(monkeypatch, local_settings(tmp_path))
+    calls = []
+    monkeypatch.setitem(sys.modules, "orchestrator", fake_orchestrator(calls))
+    replies = {"downloading": [FakeResponse([]), FakeResponse(["qwen3:8b"])]}
+
+    def fake_get(url, timeout):
+        if state == "stopped":
+            raise requests.ConnectionError("ollama service stopped")
+        return replies["downloading"][0]
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    at = AppTest.from_file(str(ROOT_DIR / "app.py"), default_timeout=30)
+    at.run()
+    assert not at.exception
+    message = " ".join(w.value for w in at.warning)
+    if state == "stopped":
+        assert "not answering" in message and "docker compose up -d ollama model-pull" in message
+    else:
+        assert "still downloading" in message and "docker compose logs -f model-pull" in message
+    # the brief can be written, but the run can't start yet; nothing was sent to the orchestrator
+    assert by_label(at.button, "Start Phase 1").disabled and not calls
+
+    # Retry checks again; once the model is there the message goes and Start turns on
+    if state == "downloading":
+        replies["downloading"].pop(0)
+        by_label(at.button, "Retry").click().run()
+        assert not at.warning and not by_label(at.button, "Start Phase 1").disabled
+
+
+def test_model_status_is_cached_briefly_per_session():
+    calls = []
+
+    def check():
+        calls.append(1)
+        return {"state": "unreachable", "message": "m", "missing": []}
+
+    store = {}
+    app.cached_model_status(store, max_age=60, check=check)
+    app.cached_model_status(store, max_age=60, check=check)
+    assert len(calls) == 1
+    app.cached_model_status(store, max_age=0, check=check)
+    assert len(calls) == 2
