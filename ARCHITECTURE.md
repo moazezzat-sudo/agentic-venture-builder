@@ -277,18 +277,21 @@ This table is copied from the README's "What works and what is mocked" table and
 | Phase | Step | Status | Notes |
 |---|---|---|---|
 | All | Shared foundation: settings, model client, state schemas, decision log, output writer (`config.py`, `llm.py`, `schemas.py`, `logger.py`) | **Working** | `tests/test_smoke.py` |
-| All | LangGraph orchestration (`orchestrator.py`) | **STUBBED** | Not built yet |
+| All | LangGraph orchestration, SQLite checkpoints, `start_run` / `resume_run` / `get_state` (`orchestrator.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
 | All | Founder approve/reject at every gate (`approval.py`, `gates.py`) | **Working** | `tests/test_record_decision.py`, `tests/test_approval.py`, `tests/test_gates.py` |
 | All | Guardrails (`guardrails.py`) | **Working** | `tests/test_guardrails.py`, `tests/test_guardrail_eval.py`; results in `evals/guardrail_results.md` |
 | All | Data tools: web search with a fallback chain of free engines, World Bank indicators, A–D source ratings (`tools/search.py`, `tools/worldbank.py`, `tools/credibility.py`) | **Working** | `tests/test_search.py`, `tests/test_worldbank.py`, `tests/test_credibility.py` |
-| Discover | Intake and follow-up questions | **STUBBED** | Not built yet |
-| Discover | Business-area weighting, research with rated sources | **STUBBED** | Not built yet |
-| Discover | Claim check, rubric score, Gate 1 with STOP | **STUBBED** | Not built yet |
-| Validate | Lean Canvas, landing-page copy | **STUBBED** | Not built yet |
-| Build | Product, UI/UX and MVP-plan proposals | **STUBBED** | Not built yet |
-| Commercial setup | Pricing and draft policies | **STUBBED** | Not built yet |
+| Discover | Intake and follow-up questions (`agents/intake.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
+| Discover | Category check, business-area weighting, research with rated sources (`guardrails.py`, `agents/weigher.py`, `agents/researcher.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
+| Discover | Claim check, rubric score, Gate 1 with STOP (`agents/skeptic.py`, `agents/scorer.py`, `gates.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
+| Discover | Coach loop, niche step and niche gate (`agents/coach.py`, `agents/subdomain.py`) | **STUBBED** | Tested offline only (`tests/test_orchestrator.py`) |
+| Validate | Lean Canvas, landing-page copy, waitlist targets set by the founder (`agents/phase2_lean_canvas.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED; the real sign-up count is entered by the founder, never estimated |
+| Build | Architect, UI/UX and MVP-plan proposals (`agents/phase3_build_plan.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED |
+| Build | Landing page, product and user docs, checked before Gate 3 (`agents/phase3_build.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED |
+| Commercial setup | Pricing and draft policies (`agents/phase4_commercial.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED |
+| Sell/deliver/get paid | Launch plan, store page and launch posts (`agents/phase5_launch.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED; nothing is posted |
 | Sell/deliver/get paid | Checkout, delivery, refunds, reconciliation (`payments.py`, `delivery.py`, `refunds.py`, `reconcile.py`) | **MOCKED** | Fake in-memory events: no payment provider, no sandbox, no real money. `tests/test_sale_to_cash.py`; `outputs/payment_test_log.md` |
-| Operate and learn | Metrics and persevere-or-pivot memo | **STUBBED** | Not built yet |
+| Operate and learn | Metrics and persevere-or-pivot memo (`agents/phase6_memo.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED; metrics come from MOCKED sales |
 
 ## Roadmap
 

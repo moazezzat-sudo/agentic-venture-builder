@@ -27,11 +27,13 @@ The repository is being built during the hackathon. A row says **Working** only 
 | Discover | Category check, business-area weighting, research with rated sources (`guardrails.py`, `agents/weigher.py`, `agents/researcher.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
 | Discover | Claim check, rubric score, Gate 1 with STOP (`agents/skeptic.py`, `agents/scorer.py`, `gates.py`) | **Working** | `tests/test_orchestrator.py`; real Groq runs from the web app to Gate 1 |
 | Discover | Coach loop, niche step and niche gate (`agents/coach.py`, `agents/subdomain.py`) | **STUBBED** | Tested offline only (`tests/test_orchestrator.py`) |
-| Validate | Lean Canvas, landing-page copy (`agents/phase2_lean_canvas.py`) | **STUBBED** | Drafts built and tested (`tests/test_phase_agents.py`), not wired into the graph yet |
-| Build | Product, UI/UX and MVP-plan proposals (`agents/phase3_build_plan.py`, `agents/phase3_build.py`) | **STUBBED** | Drafts built and tested (`tests/test_phase_agents.py`), not wired into the graph yet |
-| Commercial setup | Pricing and draft policies (`agents/phase4_commercial.py`) | **STUBBED** | Drafts built and tested (`tests/test_phase_agents.py`), not wired into the graph yet |
+| Validate | Lean Canvas, landing-page copy, waitlist targets set by the founder (`agents/phase2_lean_canvas.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED; the real sign-up count is entered by the founder, never estimated |
+| Build | Architect, UI/UX and MVP-plan proposals (`agents/phase3_build_plan.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED |
+| Build | Landing page, product and user docs, checked before Gate 3 (`agents/phase3_build.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED |
+| Commercial setup | Pricing and draft policies (`agents/phase4_commercial.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED |
+| Sell/deliver/get paid | Launch plan, store page and launch posts (`agents/phase5_launch.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED; nothing is posted |
 | Sell/deliver/get paid | Checkout, delivery, refunds, reconciliation (`payments.py`, `delivery.py`, `refunds.py`, `reconcile.py`) | **MOCKED** | Fake in-memory events: no payment provider, no sandbox, no real money. `tests/test_sale_to_cash.py`; `outputs/payment_test_log.md` |
-| Operate and learn | Metrics and persevere-or-pivot memo (`agents/phase6_memo.py`) | **STUBBED** | Drafts built and tested (`tests/test_phase_agents.py`), not wired into the graph yet |
+| Operate and learn | Metrics and persevere-or-pivot memo (`agents/phase6_memo.py`) | **STUBBED** | Draft agent; runs in the graph after the niche gate, with its own founder gate (`tests/test_phase_agents.py`, `tests/test_orchestrator.py`); its outputs are labelled STUBBED; metrics come from MOCKED sales |
 
 ## Architecture
 
