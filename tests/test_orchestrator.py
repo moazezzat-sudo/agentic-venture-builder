@@ -736,7 +736,7 @@ def test_local_model_gets_json_mode_and_a_token_cap(monkeypatch):
     import llm
 
     for model_name, think in [("qwen3:8b", False), ("gpt-oss:20b", "low")]:
-        cfg = Settings(llm_provider="ollama", ollama_model=model_name)
+        cfg = Settings(llm_provider="ollama", ollama_model=model_name, ollama_fast_model=model_name)
         monkeypatch.setattr(common, "settings", cfg)
         monkeypatch.setattr(llm, "default_settings", cfg)
         client = common._llm("fast", 600, temperature=0)
