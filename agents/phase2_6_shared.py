@@ -119,11 +119,22 @@ def texts_in(value: Any, path: str = "") -> dict[str, str]:
 def ask_guarded(
     agent: str, system: str, payload: dict[str, Any], round_no: int, role: str = "smart", max_tokens: int = 900,
     texts: Optional[Callable[[dict[str, Any]], dict[str, str]]] = None,
+    exempt: Optional[dict[str, set[str]]] = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
-    """ask(), then check_text on the draft; one rewrite on a violation. Returns (draft, violations, usage)."""
+    """ask(), then check_text on the draft; one rewrite on a violation. Returns (draft, violations, usage).
+
+    exempt maps a path prefix in the draft to rules that don't apply there, e.g.
+    {"policies.refund": {"money_handling"}}: a refund policy has to describe refunds.
+    """
     pick = texts or texts_in
+
+    def check(draft: dict[str, Any]) -> list[dict[str, Any]]:
+        hits = common.text_violations(pick(draft), rewritable=True, round_no=round_no)
+        return [v for v in hits
+                if not any(v["source"].startswith(p) and v["rule"] in rules for p, rules in (exempt or {}).items())]
+
     data, usage = ask(agent, system, payload, role=role, max_tokens=max_tokens)
-    found = common.text_violations(pick(data), rewritable=True, round_no=round_no)
+    found = check(data)
     rewrote = False
     if found:
         rewrote = True
@@ -133,7 +144,7 @@ def ask_guarded(
         usage = _add_usage(usage, usage2)
         if data2:
             data = data2
-            found = common.text_violations(pick(data), rewritable=True, round_no=round_no)
+            found = check(data)
     for v in found:
         v["agent"] = agent
     usage["rewrote"] = rewrote

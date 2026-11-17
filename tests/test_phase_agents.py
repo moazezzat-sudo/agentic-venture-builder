@@ -141,3 +141,47 @@ def test_bad_json_falls_back_to_empty_draft(env):
     draft = update["drafts"]["phase2_lean_canvas"]
     assert draft["claims"] == [] and update["tokens"] == 200
     assert read_log(env)[-1]["parsed"] is False
+
+
+# --------------------------------------------------------------------------- phase 4
+
+from agents import phase4_commercial  # noqa: E402
+
+COMMERCIAL = {
+    "pricing": {"currency": "EGP", "price": "250 per month", "model": "subscription",
+                "basis": [{"text": "Competitor charges 10 USD per seat", "source": 1}]},
+    "policies": {"terms": ["Use for hiring only"], "privacy": ["Candidate data deleted after 90 days"],
+                 "refund": ["The seller refunds the customer's first month on request within 14 days"]},
+    "rules_checklist": [{"text": "Register with the data-protection authority", "source": 0}],
+    "marketing": [{"channel": "Recruiter subreddits", "why": "pain posts found there", "source": 0}],
+}
+
+
+def test_commercial_draft(env):
+    env["use"](COMMERCIAL)
+    update = phase4_commercial.agent(dict(STATE))
+    draft = update["drafts"]["phase4_commercial"]
+    assert draft["price_has_sourced_basis"] is True and draft["pricing"]["basis"][0]["tier"] == "B"
+    assert update["text_violations"] == []  # the refund policy may talk about refunds
+    text = (env["out"] / "phase4_step1_commercial.md").read_text(encoding="utf-8")
+    assert text.startswith("> **STUBBED**")
+    assert text.count("Draft, not legal advice") == 3
+    assert "Not from an official source" in text  # the rule cites a tier-D source, not tier A
+    assert "MOCKED" in text and _unsupported_lines(env["out"]) == []
+
+
+def test_commercial_exemption_is_only_for_money_handling_in_the_refund_policy(env):
+    bad = {**COMMERCIAL, "policies": {**COMMERCIAL["policies"],
+                                      "refund": ["Refunds guaranteed, plus guaranteed income for resellers"],
+                                      "terms": ["The system will refund the customer automatically"]}}
+    env["use"](bad, bad)
+    rules = {(v["source"].split("[")[0], v["rule"]) for v in phase4_commercial.agent(dict(STATE))["text_violations"]}
+    assert ("policies.refund", "income_promise") in rules
+    assert ("policies.terms", "money_handling") in rules
+
+
+def test_unsourced_price_is_called_an_assumption(env):
+    env["use"]({**COMMERCIAL, "pricing": {**COMMERCIAL["pricing"], "basis": [{"text": "Feels right", "source": None}]}})
+    update = phase4_commercial.agent(dict(STATE))
+    assert update["drafts"]["phase4_commercial"]["price_has_sourced_basis"] is False
+    assert "no sourced basis" in (env["out"] / "phase4_step1_commercial.md").read_text(encoding="utf-8")
