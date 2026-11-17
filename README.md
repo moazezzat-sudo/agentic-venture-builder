@@ -8,9 +8,11 @@ An open-source team of AI agents that takes a founder's brief toward a sellable 
 docker compose up
 ```
 
-Then open `http://localhost:8000`, fill in your brief, and answer the follow-up questions and gates in the founder web app. No account or key is needed. The app opens at once; on the first start the local open-weight model (`qwen3:4b`, about 2.5 GB) downloads in the background, and the app says so until it is ready (progress: `docker compose logs -f model-pull`). With more memory, set `OLLAMA_MODEL=qwen3:8b` in `.env` for a stronger model about twice the size. With a free `GROQ_API_KEY` in `.env` the app works immediately, without waiting for the download.
+Run from the repository root with Docker running and Compose 2.24.0 or later (`docker compose version`). Open [localhost:8000](http://localhost:8000), enter a brief, and follow the questions to Gate 1. The default setup needs no `.env`, account, or API key. The first start downloads `qwen3:4b` (about 2.5 GB). Check progress with `docker compose logs -f model-pull` and start a brief when the app reports the model is ready.
 
-Already running Ollama on your machine (for example Ollama for Windows with a GPU)? Copy `.env.example` to `.env`, set `OLLAMA_BASE_URL=http://host.docker.internal:11434`, and start only the app with `docker compose up --no-deps app`.
+- **Already running native Ollama?** Copy `.env.example` to `.env`, set `OLLAMA_BASE_URL=http://host.docker.internal:11434`, and run `docker compose up --no-deps app`.
+- **Using Groq's free tier?** Set both `LLM_PROVIDER=groq` and `GROQ_API_KEY` in `.env`, then run `docker compose up --no-deps app`.
+- **Try the recorded brief.** Enter “A website that converts PDF files to Word documents” for university students in Egypt. The committed run found zero independent pain sources and recommended **STOP** at 1.35/4. A fresh run can return a different outcome if the search results change. [Gate decision](outputs/phase1_gate_decision.md) · [Sources](outputs/phase1_step3_research.md) · [Run log](decision_log.json)
 
 ## What works and what is mocked
 
@@ -55,7 +57,7 @@ $0.00 in API charges per run with local Ollama or Groq's free tier. The figure e
 
 ## Demo video
 
-Not recorded yet.
+Video pending. The committed Groq run records the founder brief, research sources and STOP recommendation. [Discovery](outputs/phase1_step1_discovery.md) · [Scorecard](outputs/phase1_step6_scores.md) · [Gate 1](outputs/phase1_gate_decision.md)
 
 ## What our system will NOT do
 
