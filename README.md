@@ -38,7 +38,9 @@ The system runs six phases in order: Discover, Validate, Build, Commercial setup
 - **Default with a key: Groq free tier.** Open-weight `openai/gpt-oss-120b` for judgement-heavy steps and `openai/gpt-oss-20b` for light steps, served by [Groq](https://console.groq.com/docs/models). Create a free key at [console.groq.com/keys](https://console.groq.com/keys) and put it in a local `.env` as `GROQ_API_KEY` (see `.env.example`). No payment details are needed for the free tier.
 - **Default without a key: fully local.** With no `GROQ_API_KEY`, the system uses `qwen3:8b` through [Ollama](https://ollama.com/library/qwen3), which `docker compose up` downloads. No account, key or payment.
 - The model choice is backed by our own measurements in `evals/model_choice.md` (in progress).
-- **No paid services:** web search uses free public search; payments are mocked in code.
+- **Free data sources, no keys:** web search tries DuckDuckGo, then other free engines through the `ddgs` package, then the Wikipedia and Hacker News search APIs, and records which engine answered (`tools/search.py`). Country statistics come from the [World Bank Open Data API](https://datahelpdesk.worldbank.org/knowledgebase/articles/889392) (`tools/worldbank.py`).
+- **Every source is rated A–D by fixed domain rules** (`tools/credibility.py`): official and international bodies A, social media, forums and review sites D, listed news outlets and research firms C, and rule: unknown -> B (a domain in no list is treated as the company's or author's own site). No model is used to rate sources.
+- **No paid services:** payments are mocked in code.
 
 ## Cost per run
 

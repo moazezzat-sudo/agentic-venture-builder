@@ -8,8 +8,12 @@ Public interface (PLAN.md section 11, "Shared interfaces"):
     #     "source_url": "https://api.worldbank.org/v2/country/EG/indicator/SP.POP.TOTL?format=json&mrnev=1",
     #     "indicator": "Population, total", "country": "Egypt, Arab Rep."}
 
-country is an ISO 2- or 3-letter code ("EG", "EGY"). code is a World Bank
-indicator code; the three the researchers need are named below. The value is
+country is an ISO 2- or 3-letter code ("EG", "EGY"), a country name ("Egypt",
+"Egypt, Arab Rep.", "UAE", "South Korea") or a location ending in one
+("Cairo, Egypt"). Names are matched against the World Bank country list
+(fetched once, cached under .cache/worldbank/), with a small built-in list
+used when the API cannot be reached. country_code() exposes the lookup.
+code is a World Bank indicator code; the three the researchers need are named below. The value is
 the most recent year that has data. source_url is the exact API URL the value
 came from, so it can be stored on a Claim with tier "A".
 
@@ -27,6 +31,7 @@ import json
 import logging
 import re
 import time
+import unicodedata
 from pathlib import Path
 from typing import Any, Optional, TypedDict
 
@@ -117,6 +122,117 @@ def _cache_path(url: str, cache_dir: Path) -> Path:
     return cache_dir / f"{hashlib.sha256(url.encode('utf-8')).hexdigest()[:32]}.json"
 
 
+# ---------------------------------------------------------------- country names
+
+COUNTRY_LIST_URL = f"{API_BASE}/country?format=json&per_page=400"
+
+# Common names that differ from the World Bank's official names, or are ambiguous there.
+COUNTRY_ALIASES: dict[str, str] = {
+    "uae": "AE", "emirates": "AE", "uk": "GB", "britain": "GB", "great britain": "GB", "england": "GB",
+    "usa": "US", "us": "US", "united states of america": "US", "america": "US",
+    "south korea": "KR", "north korea": "KP", "russia": "RU", "iran": "IR",
+    "turkey": "TR", "vietnam": "VN", "syria": "SY", "laos": "LA", "slovakia": "SK",
+    "kyrgyzstan": "KG", "palestine": "PS", "drc": "CD", "dr congo": "CD", "ivory coast": "CI",
+    "czech republic": "CZ", "micronesia": "FM", "hong kong": "HK", "macau": "MO", "macao": "MO",
+}
+# Used only when the World Bank country list cannot be fetched.
+BUILTIN_COUNTRIES: dict[str, str] = {
+    "egypt": "EG", "saudi arabia": "SA", "united arab emirates": "AE", "jordan": "JO", "lebanon": "LB",
+    "morocco": "MA", "tunisia": "TN", "algeria": "DZ", "libya": "LY", "sudan": "SD", "iraq": "IQ",
+    "kuwait": "KW", "qatar": "QA", "bahrain": "BH", "oman": "OM", "kenya": "KE", "nigeria": "NG",
+    "ghana": "GH", "south africa": "ZA", "india": "IN", "pakistan": "PK", "bangladesh": "BD",
+    "indonesia": "ID", "malaysia": "MY", "philippines": "PH", "china": "CN", "japan": "JP",
+    "germany": "DE", "france": "FR", "italy": "IT", "spain": "ES", "netherlands": "NL",
+    "united kingdom": "GB", "united states": "US", "canada": "CA", "brazil": "BR", "mexico": "MX",
+    "argentina": "AR", "australia": "AU", "turkiye": "TR",
+}
+
+
+def _norm(text: str) -> str:
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
+    text = re.sub(r"[^a-z0-9 ]+", " ", text)
+    text = re.sub(r"^the ", "", " ".join(text.split()))
+    return text
+
+
+def _country_rows(cache_dir: Path, use_cache: bool = True) -> Optional[list[dict[str, str]]]:
+    """[{iso2, iso3, name}] from the World Bank country list, cached on disk; None if unreachable."""
+    path = cache_dir / "countries.json"
+    if use_cache and path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))["countries"]
+        except (OSError, ValueError, KeyError):
+            log.warning("ignoring unreadable World Bank country cache %s", path)
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            payload = _get_json(COUNTRY_LIST_URL)
+            rows = [
+                {"iso2": str(r.get("iso2Code", "")).upper(), "iso3": str(r.get("id", "")).upper(), "name": str(r.get("name", ""))}
+                for r in (payload[1] if isinstance(payload, list) and len(payload) > 1 and payload[1] else [])
+                if r.get("iso2Code") and r.get("name")
+            ]
+            if not rows:
+                raise ValueError("empty country list")
+            break
+        except (requests.RequestException, ValueError, TypeError, IndexError) as exc:
+            log.warning("World Bank country list attempt %d/%d failed: %s", attempt, MAX_ATTEMPTS, exc)
+            if attempt == MAX_ATTEMPTS:
+                return None
+            time.sleep(BACKOFF_SECONDS * 2 ** (attempt - 1))
+    if use_cache:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"fetched_at": utc_now(), "countries": rows}, indent=1), encoding="utf-8")
+        tmp.replace(path)
+    return rows
+
+
+def _name_index(rows: Optional[list[dict[str, str]]]) -> dict[str, str]:
+    """Normalised name -> ISO2 code. Short forms ("egypt" from "Egypt, Arab Rep.") only when unambiguous."""
+    if rows is None:
+        index = dict(BUILTIN_COUNTRIES)
+    else:
+        index = {_norm(r["name"]): r["iso2"] for r in rows}
+        short: dict[str, set[str]] = {}
+        for r in rows:
+            if "," in r["name"]:
+                short.setdefault(_norm(r["name"].split(",")[0]), set()).add(r["iso2"])
+        for name, codes in short.items():
+            if len(codes) == 1 and name not in index:
+                index[name] = codes.pop()
+    index.update(COUNTRY_ALIASES)
+    return index
+
+
+def country_code(country: str, cache_dir: Optional[Path] = None, use_cache: bool = True) -> Optional[str]:
+    """Return the World Bank country code for an ISO code, a country name or a "City, Country" location.
+
+    None when nothing matches. ISO codes are returned upper-case as given ("EGY" stays "EGY").
+    """
+    if not isinstance(country, str) or not country.strip():
+        return None
+    folder = Path(cache_dir or Path(settings.cache_dir) / "worldbank")
+    text = country.strip()
+    norm = _norm(text)
+    if norm in COUNTRY_ALIASES:
+        return COUNTRY_ALIASES[norm]
+    rows = _country_rows(folder, use_cache)
+    if _COUNTRY_RE.match(text):
+        codes = None if rows is None else {r["iso2"] for r in rows} | {r["iso3"] for r in rows}
+        if codes is None or text.upper() in codes:
+            return text.upper()
+    index = _name_index(rows)
+    if norm in index:
+        return index[norm]
+    # "Cairo, Egypt" / "Riyadh - Saudi Arabia": try the parts, last first.
+    for part in reversed([p for p in re.split(r",|/|\s-\s|\(|\)", text) if p.strip()]):
+        if _norm(part) in index:
+            return index[_norm(part)]
+    return None
+
+
+# ---------------------------------------------------------------- indicator
+
 def indicator(
     country: str,
     code: str,
@@ -125,15 +241,22 @@ def indicator(
 ) -> IndicatorValue:
     """Return the latest {value, year, source_url} (plus indicator and country names).
 
-    value and year are None, with an "error" key, when no value is available.
-    Raises ValueError only for a malformed country or indicator code.
+    country may be an ISO code, a country name or a "City, Country" location.
+    value and year are None, with an "error" key, when no value is available
+    (including a country name that matches no country).
+    Raises ValueError only for an empty country or a malformed indicator code.
     """
-    if not isinstance(country, str) or not _COUNTRY_RE.match(country.strip()):
-        raise ValueError("country must be an ISO 2- or 3-letter code such as 'EG' or 'EGY'")
+    if not isinstance(country, str) or not country.strip():
+        raise ValueError("country must be an ISO code such as 'EG' or a country name such as 'Egypt'")
     if not isinstance(code, str) or not _CODE_RE.match(code.strip()):
         raise ValueError("code must be a World Bank indicator code such as 'SP.POP.TOTL'")
-    url = source_url(country, code)
     folder = Path(cache_dir or Path(settings.cache_dir) / "worldbank")
+    resolved = country_code(country, cache_dir=folder, use_cache=use_cache)
+    if resolved is None:
+        return {"value": None, "year": None, "source_url": COUNTRY_LIST_URL, "indicator": None, "country": None,
+                "error": f"no World Bank country matches {country.strip()!r}"}
+    country = resolved
+    url = source_url(country, code)
     path = _cache_path(url, folder)
 
     if use_cache and path.exists():
@@ -170,6 +293,7 @@ def indicator(
 
 __all__ = [
     "indicator",
+    "country_code",
     "source_url",
     "IndicatorValue",
     "WorldBankError",
