@@ -732,6 +732,21 @@ TIER_HELP = ("A: official (government, World Bank, regulators) · B: the company
 VERDICT_COLORS = OUTCOME_COLORS
 
 
+ASSUMPTION_LABELS = {"customer": "Customer", "problem": "Problem", "current_alternative": "What they use now",
+                     "why_now": "Why now", "payment": "How they'd pay"}
+
+
+def assumption_line(assumption: Any) -> str:
+    """'**Customer:** text', with a 'needs your answer' badge when the text starts with 'Unclear'."""
+    if not isinstance(assumption, dict):
+        return str(assumption)
+    kind = str(assumption.get("type") or "")
+    label = ASSUMPTION_LABELS.get(kind, kind.replace("_", " ").capitalize() or "Assumption")
+    text = str(assumption.get("text") or "").strip()
+    badge = " :orange-badge[needs your answer]" if text.lower().startswith("unclear") else ""
+    return f"**{label}:** {text}{badge}"
+
+
 def normalize_question(q: dict[str, Any]) -> dict[str, Any]:
     """Old {field, question} and new {id, text, why, suggestions, choices} questions in one shape."""
     choices = q.get("choices")
@@ -805,9 +820,13 @@ def render_stepper(st, result: dict[str, Any], state: dict[str, Any]) -> None:  
 def render_questions(st, result: dict[str, Any], state: dict[str, Any], call, run_id: str) -> None:  # pragma: no cover - UI
     """Discovery: what I understood, then one card per question with why, suggestion chips and choices."""
     stage = str(result.get("stage", "intake"))
-    rnd = state.get("round", 1)
-    if stage == "intake":
+    # Discovery has its own rounds inside research round 1: both go into the widget keys.
+    rnd = f"{state.get('round', 1)}_{result.get('round', 0)}"
+    if stage in ("intake", "discovery"):
         st.subheader("Before I research, a few questions")
+    elif stage == "discovery_confirm":
+        st.subheader("Is this your idea?")
+        st.caption("Only a confirmed understanding goes to research. If something is off, correct it below.")
     elif stage == "gate_2_targets":
         st.subheader("Your waitlist test")
         st.caption("Targets are yours, set before the test. I never estimate or invent a sign-up count.")
@@ -821,17 +840,15 @@ def render_questions(st, result: dict[str, Any], state: dict[str, Any], call, ru
                         + (f" (your note: {last['note']})" if last.get("note") else "") + ".")
 
     summary = result.get("summary")
-    if summary:
+    if summary is not None:
         with st.container(border=True):
             st.markdown("**Here's what I understood**")
-            if isinstance(summary, dict):
-                st.markdown(str(summary.get("text") or summary.get("understood") or ""))
-                assumptions = summary.get("assumptions") or []
-                if assumptions:
-                    st.markdown("**What I'm assuming** (correct me below):")
-                    st.markdown("\n".join(f"- {a}" for a in assumptions))
-            else:
-                st.markdown(str(summary))
+            text = summary.get("text") or summary.get("understood") if isinstance(summary, dict) else summary
+            st.markdown(str(text).strip() if str(text or "").strip() else ":gray[I'll fill this in from your answers.]")
+            assumptions = summary.get("assumptions") or [] if isinstance(summary, dict) else []
+            if assumptions:
+                st.markdown("**What I'm assuming** (correct me below):")
+                st.markdown("\n".join(f"- {assumption_line(a)}" for a in assumptions))
 
     if result.get("needs_accept_revised_idea") and result.get("revised_idea"):
         st.info(f"Proposed revised idea: {result['revised_idea']}")
@@ -855,13 +872,15 @@ def render_questions(st, result: dict[str, Any], state: dict[str, Any], call, ru
                         row.button(s, key=f"{key}_chip{i}", on_click=_fill, args=(st.session_state, key, s))
                 answers[q["id"]] = st.text_area(q["text"], key=key, label_visibility="collapsed",
                                                 placeholder="Type here, or click a suggestion" if q["suggestions"] else "Type here")
-    label = "Send and start the research" if stage == "intake" else "Send answers"
+    label = {"intake": "Send and start the research", "discovery": "Send answers",
+             "discovery_confirm": "Confirm"}.get(stage, "Send answers")
     if st.button(label, type="primary", key=f"send_{stage}_{rnd}"):
+        # Answers are keyed by the question id, exactly as the orchestrator expects.
         reply: dict[str, Any] = {"answers": {k: v for k, v in answers.items() if str(v).strip()}}
         if result.get("needs_accept_revised_idea"):
             reply["accept_revised_idea"] = bool(st.session_state.get(f"accept_{stage}_{rnd}"))
-        call("Researching your idea" if stage != "gate_2_targets" else "Continuing", _orchestrator().resume_run,
-             run_id, reply)
+        busy = {"discovery": "Updating what I understood", "gate_2_targets": "Continuing"}.get(stage, "Researching your idea")
+        call(busy, _orchestrator().resume_run, run_id, reply)
 
 
 def _fill(store: Any, key: str, value: str) -> None:

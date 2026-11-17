@@ -567,3 +567,93 @@ def test_phase_drafts_render_as_documents(tmp_path, monkeypatch):
         assert label in page, label
     assert "https://www.reddit.com/r/cairo/1" in page  # canvas cells keep their sources
     assert by_label(at.button, "Join the waitlist").disabled  # copy only: nothing is published
+
+
+# ---------------------------------------------------------------- discovery screens (Eyad's real payloads)
+
+def discovery_orchestrator(calls, summary_text):
+    from agents.discovery import CONFIRM_NO, CONFIRM_YES, question
+
+    mod = fake_orchestrator(calls)
+    assumptions = [
+        {"id": "A1", "type": "customer", "text": "Amateur five-a-side players in Cairo"},
+        {"id": "A2", "type": "problem", "text": "Finding a free pitch and enough players tonight"},
+        {"id": "A3", "type": "current_alternative", "text": "WhatsApp groups and phoning pitches"},
+        {"id": "A4", "type": "why_now", "text": "Unclear: what has changed recently?"},
+        {"id": "A5", "type": "payment", "text": "Unclear: per booking or a subscription?"},
+    ]
+    summary = {"text": summary_text, "assumptions": assumptions}
+    discovery = {"kind": "questions", "stage": "discovery", "round": 1, "summary": summary,
+                 "awaiting_founder": True, "stubbed": False, "stubbed_parts": [],
+                 "questions": [question("r1q1", "What has changed that makes this urgent now?", "Why now is unclear.",
+                                        ["New pitches opened", "Players moved to apps"]),
+                               question("has_team", "Do you have teammates?", "Founder fit.",
+                                        choices=["No, just me", "Yes (list their skills)"]),
+                               question("r1q3", "How would players pay?", "Willingness to pay.")]}
+    confirm = {"kind": "questions", "stage": "discovery_confirm", "round": 1, "summary": summary,
+               "awaiting_founder": True, "stubbed": False, "stubbed_parts": [],
+               "questions": [question("confirm", "Is this your idea?", "Only a confirmed understanding goes to research.",
+                                      choices=[CONFIRM_YES, CONFIRM_NO]),
+                             question("correction", "If not, what should change?", "Your correction updates the summary.")]}
+
+    def start_run(brief, run_id):
+        calls.append(("start", brief, run_id))
+        log_action(agent="orchestrator", action="start_run", run_id=run_id)
+        return {**discovery, "run_id": run_id}
+
+    def resume_run(run_id, reply):
+        calls.append(("resume", reply, run_id))
+        return {**confirm, "run_id": run_id} if len(calls) == 2 else {**GATE, "run_id": run_id, "awaiting_founder": True}
+
+    mod.start_run, mod.resume_run = start_run, resume_run
+    return mod
+
+
+@pytest.mark.parametrize("summary_text", ["You want an app for amateur football players in Cairo.", ""])
+def test_discovery_shows_labelled_assumptions_and_sends_answers_by_question_id(tmp_path, monkeypatch, summary_text):
+    from streamlit.testing.v1 import AppTest
+
+    use_settings(monkeypatch, ready_settings(tmp_path))
+    calls = []
+    monkeypatch.setitem(sys.modules, "orchestrator", discovery_orchestrator(calls, summary_text))
+    at = AppTest.from_file(str(ROOT_DIR / "app.py"), default_timeout=30)
+    at.run()
+    by_label(at.text_area, "Your idea").input("Football pitch app")
+    by_label(at.button, "Start Phase 1").click().run()
+    assert not at.exception
+
+    page = " ".join(m.value for m in at.markdown)
+    assert "{'id'" not in page and "'type'" not in page  # never a raw dict
+    for line in ("**Customer:** Amateur five-a-side players in Cairo", "**Problem:** Finding a free pitch",
+                 "**What they use now:** WhatsApp groups", "**Why now:** Unclear: what has changed recently? "
+                 ":orange-badge[needs your answer]", "**How they'd pay:** Unclear: per booking or a subscription? "
+                 ":orange-badge[needs your answer]"):
+        assert line in page, line
+    assert "**Problem:** Finding a free pitch and enough players tonight :orange-badge" not in page
+    if summary_text:
+        assert summary_text in page
+    else:
+        assert "I'll fill this in from your answers" in page
+
+    # every question type renders: free text with chips, choices, plain free text
+    by_label(at.button, "Players moved to apps").click().run()
+    by_label(at.radio, "Do you have teammates?").set_value("No, just me").run()
+    by_label(at.text_area, "How would players pay?").input("Per booking")
+    by_label(at.button, "Send answers").click().run()
+    assert not at.exception
+    assert calls[1][1] == {"answers": {"r1q1": "Players moved to apps", "has_team": "No, just me",
+                                       "r1q3": "Per booking"}}
+
+    # the confirm step: choices plus an optional correction, keyed "confirm" and "correction"
+    assert any("Is this your idea?" in s.value for s in at.subheader)
+    by_label(at.radio, "Is this your idea?").set_value("Yes, that's my idea").run()
+    by_label(at.button, "Confirm").click().run()
+    assert not at.exception
+    assert calls[2][1] == {"answers": {"confirm": "Yes, that's my idea"}}
+
+
+def test_assumption_line():
+    assert app.assumption_line({"id": "A1", "type": "payment", "text": "Per booking"}) == "**How they'd pay:** Per booking"
+    assert app.assumption_line({"type": "why_now", "text": "Unclear yet"}).endswith(":orange-badge[needs your answer]")
+    assert app.assumption_line({"type": "new_kind", "text": "x"}) == "**New kind:** x"
+    assert app.assumption_line("plain text") == "plain text"
