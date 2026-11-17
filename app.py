@@ -135,6 +135,17 @@ def run_usage(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
     return {"tokens": tokens, "cost": round(cost, 6), "models": sorted(models), "entries": len(entries)}
 
 
+def model_hint(exc: BaseException) -> str:
+    """A plain next step when the failure is the model being unreachable."""
+    text = f"{type(exc).__name__} {exc}".lower()
+    if not any(s in text for s in ("connecterror", "connection", "refused", "11434")):
+        return ""
+    if settings.provider == "ollama":
+        return (f" The local model is not reachable at {settings.ollama_base_url}. Start Ollama with "
+                f"`{settings.ollama_model}` pulled (docker compose up does both), or put a free GROQ_API_KEY in .env.")
+    return " The model provider is not reachable; check the network and the key in .env."
+
+
 def output_files(folder: Optional[Path] = None) -> list[Path]:
     folder = Path(folder or settings.outputs_dir)
     if not folder.exists():
@@ -204,7 +215,7 @@ def main() -> None:  # pragma: no cover - exercised through streamlit.testing in
             with st.spinner(label):
                 ss.result = fn(*args)
         except Exception as exc:  # show the reason; the run stays where it was
-            ss.error = f"{label} failed: {type(exc).__name__}: {exc}"
+            ss.error = f"{label} failed: {type(exc).__name__}: {exc}" + model_hint(exc)
         st.rerun()
 
     # ---- sidebar: run, model, cost, phases

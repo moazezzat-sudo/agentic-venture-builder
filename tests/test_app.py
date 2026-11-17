@@ -55,6 +55,12 @@ def test_read_log_survives_missing_or_broken_file(tmp_path):
     assert app.read_log(broken) == []
 
 
+def test_model_hint_only_for_unreachable_model():
+    hint = app.model_hint(ConnectionRefusedError("[WinError 10061] actively refused it"))
+    assert "GROQ_API_KEY" in hint or "not reachable" in hint
+    assert app.model_hint(ValueError("brief must have an idea")) == ""
+
+
 def test_later_phases_are_labelled_mocked_or_stubbed():
     for number, _name, status, _note in app.PHASES:
         if number > 1:
