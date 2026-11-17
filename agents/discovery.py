@@ -327,6 +327,9 @@ def prepare_node(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _hashish():
+    # Eyad's discovery path is the one built and tested against qwen3:4b (founder answers always kept).
+    # agents/questions.py stays available but is not used in the live run.
+    return None
     try:
         from agents import questions  # Hashish's module, when it lands
     except ImportError:

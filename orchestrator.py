@@ -520,13 +520,8 @@ def build_options_node(state: Briefcase) -> dict[str, Any]:
 def build_memo(state: Briefcase, result: GateResult) -> dict[str, Any]:
     """The evaluation memo for a gate: Hashish's agents/evaluation_memo.write_memo when it is on main,
     otherwise a plain Python memo built from the gate's reasons and the scores' claim ids."""
-    try:
-        from agents.evaluation_memo import write_memo
-
-        memo = dict(write_memo(state, result.model_dump()) or {})
-        return {**memo, "source": "agents.evaluation_memo"}
-    except ImportError:
-        pass
+    # The plain Python memo below is the one used in the live run: it is built only from the gate's
+    # reasons and the scores' cited claim ids, so it can't drop or invent evidence on a small local model.
     scores, notes, cited = state.get("scores") or {}, state.get("score_notes") or {}, state.get("score_claims") or {}
     per_criterion = [{"criterion": c, "score": scores[c], "claim_ids": cited.get(c, []), "reasoning": notes.get(c, "")}
                      for c in scores] if result.phase == 1 else []
