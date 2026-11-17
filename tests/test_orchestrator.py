@@ -204,7 +204,7 @@ def test_discovery_conversation_comes_before_research(run):
     assert r["summary"]["text"].startswith("Here's what I understood")
     assert [a["type"] for a in r["summary"]["assumptions"]] == list(discovery.ASSUMPTION_TYPES)
     for q in r["questions"]:
-        assert set(q) == {"id", "text", "why", "suggestions", "choices"}
+        assert set(q) == {"id", "text", "why", "suggestions", "choices", "type"}
     ids = [q["id"] for q in r["questions"]]
     assert "skills" in ids and "location" not in ids  # only missing founder fields are asked
     assert "evidence" not in run["model"].calls  # no research before confirmation
@@ -926,3 +926,108 @@ def test_an_echoed_input_counts_as_not_parsed_and_is_retried(monkeypatch):
     data, usage = common.ask_json("discovery", {"brief": {"idea": "x"}}, expect=("summary", "questions"))
     assert data == {"summary": "ok", "questions": []} and usage["retried"] and usage["tokens"] == 100
     assert seen[0].startswith("Input data (do not repeat it):") and "with its keys: summary, questions." in seen[0]
+
+
+# ---- discovery on small local models (the qwen3:4b bug on the demo laptop)
+
+FOOTBALL = {"idea": "An app that lets amateur football players film their matches on a phone and get highlight clips",
+            "target_market": "amateur five-a-side teams in Cairo", "location": "Cairo, Egypt", "skills": ["flutter"],
+            "budget": "500 USD", "time_available": "15 hours a week", "has_team": False}
+
+
+def discovery_model(run, monkeypatch, reply):
+    """Every discovery call returns `reply` (a dict, or a string for broken JSON); other agents as usual."""
+    model = run["model"]
+
+    def fake(agent, system, user, *args, **kwargs):
+        if agent == "discovery":
+            return (reply if isinstance(reply, str) else json.dumps(reply)), 50, 0.0, "fake-model"
+        return FakeModel.__call__(model, agent, system, user, *args, **kwargs)
+
+    monkeypatch.setattr(common, "invoke_model", fake)
+
+
+def test_empty_model_reply_still_gives_the_founders_understanding(run, monkeypatch):
+    discovery_model(run, monkeypatch, {})
+    r = orchestrator.start_run(FOOTBALL, "disc-empty")
+    summary = r["summary"]
+    assert summary["text"].startswith("You want to build an app that lets amateur football players")
+    assert "for amateur five-a-side teams in Cairo" in summary["text"] and "in Cairo, Egypt" in summary["text"]
+    by_type = {a["type"]: a["text"] for a in summary["assumptions"]}
+    assert by_type["customer"] == "amateur five-a-side teams in Cairo"
+    assert "film their matches" in by_type["problem"]
+    assert by_type["payment"] == discovery.UNCLEAR  # nothing covers it yet
+    # The unclear types get Python questions, each tagged with its assumption type.
+    types = {q["type"] for q in r["questions"]}
+    assert {"current_alternative", "why_now", "payment"} <= types
+    log = [e for e in log_entries(run) if e["action"] == "discovery_round_1"][0]
+    assert "summary" in log["missing_fields"] and log["raw_reply"] is not None
+
+
+def test_answers_go_into_their_assumptions_in_python(run, monkeypatch):
+    discovery_model(run, monkeypatch, {})
+    r = orchestrator.start_run(FOOTBALL, "disc-answers")
+    by_type = {q["type"]: q["id"] for q in r["questions"] if q["type"]}
+    r = orchestrator.resume_run("disc-answers", {"answers": {
+        by_type["payment"]: "Teams pay 50 EGP per match video",
+        by_type["current_alternative"]: "A friend films on a phone and nobody edits it"}})
+    by = {a["type"]: a["text"] for a in r["summary"]["assumptions"]}
+    assert by["payment"] == "Teams pay 50 EGP per match video"
+    assert by["current_alternative"] == "A friend films on a phone and nobody edits it"
+    assert "Teams pay 50 EGP per match video" in r["summary"]["text"]
+    assert r["summary"]["text"]  # never empty
+
+
+def test_dict_shaped_reply_is_parsed():
+    data = {"Here's what I understood": "Players want highlight clips of their own matches.",
+            "assumptions": {"Customer": "Five-a-side players", "Current Alternative": "WhatsApp videos",
+                            "Why_Now": "Cheap phones film in HD", "pricing": "Per match"},
+            "Problem": "Nobody has video of amateur games",
+            "questions": ["Who pays, the team or each player?", {"question": "Where do they play?", "type": "customer"}]}
+    out = discovery.normalize_discovery(data)
+    assert out["summary"] == "Players want highlight clips of their own matches."
+    assert out["assumptions"] == {"customer": "Five-a-side players", "current_alternative": "WhatsApp videos",
+                                  "why_now": "Cheap phones film in HD", "payment": "Per match",
+                                  "problem": "Nobody has video of amateur games"}
+    assert [q["text"] for q in out["questions"]] == ["Who pays, the team or each player?", "Where do they play?"]
+    assert out["questions"][1]["type"] == "customer"
+    listed = discovery.normalize_discovery({"assumptions": [{"name": "payment", "value": "monthly"},
+                                                            {"type": "problem", "assumption": "no video"}]})
+    assert listed["assumptions"] == {"payment": "monthly", "problem": "no video"}
+
+
+def test_model_text_does_not_replace_a_founder_answer_or_use_unclear(run, monkeypatch):
+    discovery_model(run, monkeypatch, {"summary": "Unclear", "assumptions": [{"type": "customer", "text": "Unclear: maybe"},
+                                                                              {"type": "why_now", "text": "Phones film in HD"}]})
+    r = orchestrator.start_run(FOOTBALL, "disc-precedence")
+    by = {a["type"]: a["text"] for a in r["summary"]["assumptions"]}
+    assert by["customer"] == "amateur five-a-side teams in Cairo"  # "Unclear" from the model is ignored
+    assert by["why_now"] == "Phones film in HD"
+    assert r["summary"]["text"].startswith("You want to build")  # a useless model summary is not used
+
+
+def test_correction_updates_the_summary_and_the_named_assumption(run, monkeypatch):
+    discovery_model(run, monkeypatch, {})
+    r = orchestrator.start_run(FOOTBALL, "disc-correct")
+    while r["stage"] == "discovery":
+        r = orchestrator.resume_run("disc-correct", {"answers": {}})
+    r = orchestrator.resume_run("disc-correct", {"answers": {"confirm": discovery.CONFIRM_NO,
+                                                             "correction": "Teams pay per match, not players"}})
+    assert r["stage"] == "discovery_confirm"
+    assert "Teams pay per match, not players" in r["summary"]["text"]
+    by = {a["type"]: a["text"] for a in r["summary"]["assumptions"]}
+    assert "Teams pay per match, not players" in by["payment"]
+
+
+def test_keywords_come_from_the_founders_words_when_the_model_gives_none(run, monkeypatch):
+    discovery_model(run, monkeypatch, "not json at all")
+    r = orchestrator.start_run(FOOTBALL, "disc-kw")
+    while r["stage"] == "discovery":
+        r = orchestrator.resume_run("disc-kw", {"answers": {}})
+    assert r["summary"]["text"]  # the confirm screen is never empty
+    r = orchestrator.resume_run("disc-kw", {"answers": {"confirm": discovery.CONFIRM_YES}})
+    kw = orchestrator.get_state("disc-kw")["brief"]["keywords"]
+    assert kw["customer"] and kw["problem"] and kw["solution"]
+    assert "football" in f"{kw['problem']} {kw['solution']}".lower()
+    plan = orchestrator.get_state("disc-kw")["search_plan"]
+    assert any("football" in p["query"].lower() for p in plan if p["evidence_type"] == "pain")

@@ -121,7 +121,8 @@ def ask_json(
                                            max_tokens=max_tokens, temperature=temperature)
         tokens, cost = tokens + t2, cost + c2
         data = valid(parse_json(text))
-    return data, {"tokens": tokens, "cost": cost, "model": model, "parsed": bool(data), "retried": retried}
+    return data, {"tokens": tokens, "cost": cost, "model": model, "parsed": bool(data), "retried": retried,
+                  "raw": cut(text, 300)}  # the start of the last reply, for logging when a field is missing
 
 
 def model_fields(usage: dict[str, Any]) -> dict[str, Any]:
