@@ -8,7 +8,9 @@ An open-source team of AI agents that takes a founder's brief toward a sellable 
 docker compose up
 ```
 
-Optional: copy `.env.example` to `.env` and add a free Groq key for faster runs. Without a key, the first start downloads the local open-weight model (`qwen3:8b`, several GB) into a Docker volume. Then open `http://localhost:8000`. The founder web app is under construction (see the table below); until it lands, this command runs the smoke tests and serves the repository on that port.
+Then open `http://localhost:8000`, fill in your brief, and answer the follow-up questions and gates in the founder web app. The first start downloads the local open-weight model (`qwen3:8b`, several GB) into a Docker volume; no account or key is needed.
+
+Already running Ollama on your machine (for example Ollama for Windows with a GPU)? Copy `.env.example` to `.env`, set `OLLAMA_BASE_URL=http://host.docker.internal:11434`, and start only the app with `docker compose up --no-deps app`.
 
 ## What works and what is mocked
 
@@ -18,15 +20,16 @@ The repository is being built during the hackathon. A row says **Working** only 
 |---|---|---|---|
 | All | Shared foundation: settings, model client, state schemas, decision log, output writer (`config.py`, `llm.py`, `schemas.py`, `logger.py`) | **Working** | `tests/test_smoke.py` |
 | All | LangGraph orchestration (`orchestrator.py`) | **STUBBED** | Not built yet |
-| All | Founder approve/reject at every gate (`approval.py`, `gates.py`) | **STUBBED** | Not built yet |
-| All | Guardrails (`guardrails.py`) | **STUBBED** | Not built yet |
+| All | Founder approve/reject at every gate (`approval.py`, `gates.py`) | **Working** | `tests/test_record_decision.py`, `tests/test_approval.py`, `tests/test_gates.py` |
+| All | Guardrails (`guardrails.py`) | **Working** | `tests/test_guardrails.py`, `tests/test_guardrail_eval.py`; results in `evals/guardrail_results.md` |
+| All | Data tools: web search with a fallback chain of free engines, World Bank indicators, A–D source ratings (`tools/search.py`, `tools/worldbank.py`, `tools/credibility.py`) | **Working** | `tests/test_search.py`, `tests/test_worldbank.py`, `tests/test_credibility.py` |
 | Discover | Intake and follow-up questions | **STUBBED** | Not built yet |
 | Discover | Business-area weighting, research with rated sources | **STUBBED** | Not built yet |
 | Discover | Claim check, rubric score, Gate 1 with STOP | **STUBBED** | Not built yet |
 | Validate | Lean Canvas, landing-page copy | **STUBBED** | Not built yet |
 | Build | Product, UI/UX and MVP-plan proposals | **STUBBED** | Not built yet |
 | Commercial setup | Pricing and draft policies | **STUBBED** | Not built yet |
-| Sell/deliver/get paid | Checkout, delivery, refunds, reconciliation | **STUBBED** | Will be MOCKED only: no payment provider, no sandbox |
+| Sell/deliver/get paid | Checkout, delivery, refunds, reconciliation (`payments.py`, `delivery.py`, `refunds.py`, `reconcile.py`) | **MOCKED** | Fake in-memory events: no payment provider, no sandbox, no real money. `tests/test_sale_to_cash.py`; `outputs/payment_test_log.md` |
 | Operate and learn | Metrics and persevere-or-pivot memo | **STUBBED** | Not built yet |
 
 ## Architecture
@@ -35,8 +38,8 @@ The system runs six phases in order: Discover, Validate, Build, Commercial setup
 
 ## Models and free resources
 
-- **Default with a key: Groq free tier.** Open-weight `openai/gpt-oss-120b` for judgement-heavy steps and `openai/gpt-oss-20b` for light steps, served by [Groq](https://console.groq.com/docs/models). Create a free key at [console.groq.com/keys](https://console.groq.com/keys) and put it in a local `.env` as `GROQ_API_KEY` (see `.env.example`). No payment details are needed for the free tier.
-- **Default without a key: fully local.** With no `GROQ_API_KEY`, the system uses `qwen3:8b` through [Ollama](https://ollama.com/library/qwen3), which `docker compose up` downloads. No account, key or payment.
+- **Default: fully local.** The open-weight `qwen3:8b` runs on your machine through [Ollama](https://ollama.com/library/qwen3); `docker compose up` downloads it, or point the app at an Ollama you already run (see Quickstart). No account, key or payment. Settings are in `.env.example`: `OLLAMA_MODEL`, an optional smaller `OLLAMA_FAST_MODEL` for light steps, an 8,192-token context, and qwen3's thinking mode turned off for speed.
+- **Optional: Groq free tier.** Set `LLM_PROVIDER=groq` (or `auto` with a key) and a free `GROQ_API_KEY` from [console.groq.com/keys](https://console.groq.com/keys) to use the open-weight `openai/gpt-oss-120b` and `openai/gpt-oss-20b` served by [Groq](https://console.groq.com/docs/models). Never required; no payment details are needed for the free tier.
 - The model choice is backed by our own measurements in `evals/model_choice.md` (in progress).
 - **Free data sources, no keys:** web search tries DuckDuckGo, then other free engines through the `ddgs` package, then the Wikipedia and Hacker News search APIs, and records which engine answered (`tools/search.py`). Country statistics come from the [World Bank Open Data API](https://datahelpdesk.worldbank.org/knowledgebase/articles/889392) (`tools/worldbank.py`).
 - **Every source is rated A–D by fixed domain rules** (`tools/credibility.py`): official and international bodies A, social media, forums and review sites D, listed news outlets and research firms C, and rule: unknown -> B (a domain in no list is treated as the company's or author's own site). No model is used to rate sources.
@@ -44,7 +47,7 @@ The system runs six phases in order: Discover, Validate, Build, Commercial setup
 
 ## Cost per run
 
-About $0.00 per run: the Groq free tier and the local Ollama model charge nothing per token (`LLM_COST_PER_1K_TOKENS=0`). The token count per run will be measured from the logged demo run.
+$0.00 per run: the model runs locally through Ollama, so there is no charge per token (`LLM_COST_PER_1K_TOKENS=0`), and every data source is free. The token count per run will be measured from the logged demo run and shown in the web app's sidebar.
 
 ## Demo video
 

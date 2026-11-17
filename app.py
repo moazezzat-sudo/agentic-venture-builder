@@ -39,7 +39,7 @@ PHASES: list[tuple[int, str, str, str]] = [
     (2, "Validate", "STUBBED", "Lean Canvas and landing-page copy are not built yet."),
     (3, "Build", "STUBBED", "Product, UI/UX and MVP-plan proposals are not built yet."),
     (4, "Commercial setup", "STUBBED", "Pricing and draft policies are not built yet."),
-    (5, "Sell/deliver/get paid", "STUBBED", "Will be MOCKED only: no payment provider, no sandbox, no real money."),
+    (5, "Sell/deliver/get paid", "MOCKED", "Fake in-memory payment events: no payment provider, no sandbox, no real money."),
     (6, "Operate and learn", "STUBBED", "Metrics and the persevere-or-pivot memo are not built yet."),
 ]
 
