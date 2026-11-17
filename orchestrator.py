@@ -184,10 +184,12 @@ def make_gate_eval(gate: str):
         round_no = state.get("round", 1)
         draft_hits = text_violations(current_drafts(state), True, round_no)
         founder_hits = [v for v in state.get("text_violations") or [] if not v.get("rewritable")]
+        gaps = [f"\"{g['area']}\" ({g['focus']})" for g in state.get("search_gaps") or [] if g.get("round") == round_no]
         result = evaluate_gate_1(
             state["scores"], current_claims(state),
             violations=[describe_violation(v) for v in founder_hits],
             rewritable_violations=[describe_violation(v) for v in draft_hits],
+            evidence_gaps=gaps,
         ).model_copy(update={"gate": gate})
         write_gate(1, _gate_file(gate), _gate_markdown(result, None))
         log_action(agent="gate", action=gate, model=None, run_id=state.get("run_id"), outcome=result.recommendation,

@@ -153,13 +153,32 @@ def test_weak_idea_recommends_stop(run):
     assert "Founder chose **STOP**" in (run["out"] / "phase1_gate_decision.md").read_text(encoding="utf-8")
 
 
-def test_no_search_results_means_stop(run, monkeypatch):
+def test_no_search_results_at_all_means_repeat_not_stop(run, monkeypatch):
+    # search() returns [] only when every engine failed: an outage, not evidence against the idea.
     monkeypatch.setattr(tools.search, "search", lambda q, max_results=3: [])
     r = orchestrator.start_run(FULL_BRIEF, "empty")
-    # World Bank figures are sourced, but they don't show the pain: problem evidence is 0 -> stop.
-    assert r["recommendation"] == "stop"
-    assert any("problem_evidence scored 0" in reason for reason in r["reasons"])
+    assert r["recommendation"] == "repeat"
+    assert any("problem_evidence scored 0" in reason for reason in r["reasons"])  # the scores still say why
+    assert any("could not be gathered" in reason for reason in r["reasons"])
     assert "researcher" not in run["model"].calls
+
+
+def test_search_that_works_but_finds_no_pain_still_stops(run, monkeypatch):
+    # Web search answers, but nothing it finds shows the pain: problem evidence 0 -> stop.
+    monkeypatch.setattr(tools.search, "search", lambda q, max_results=3: [
+        {"title": f"Unrelated page about {q}", "url": f"https://x{abs(hash(q)) % 99}.example.org/", "snippet": "",
+         "engine": "ddgs:duckduckgo"}])
+    model = run["model"]
+
+    def no_pain(agent, *args, **kwargs):
+        text, *rest = FakeModel.__call__(model, agent, *args, **kwargs)
+        if agent == "researcher":
+            text = json.dumps({"claims": [{"text": "A tool exists", "source": 0, "criterion": "competition"}]})
+        return (text, *rest)
+
+    monkeypatch.setattr(common, "invoke_model", no_pain)
+    r = orchestrator.start_run(FULL_BRIEF, "no-pain")
+    assert r["recommendation"] == "stop" and any("problem_evidence scored 0" in x for x in r["reasons"])
 
 
 def test_gate_refuses_anything_but_a_founder_decision(run):
@@ -345,6 +364,73 @@ def test_unrelated_and_off_forum_results_are_dropped(monkeypatch):
     area = {"name": "a", "query": "students converting PDF to Word", "forum_query": "students converting PDF to Word site:reddit.com"}
     urls = [s["url"] for s in researcher.gather_sources(area)]
     assert urls == ["https://www.ilovepdf.com/pdf_to_word", "https://www.reddit.com/r/college/x"]
+
+
+def test_encyclopedia_results_must_match_in_their_title():
+    from agents.researcher import relevant
+
+    q = "independent restaurants online booking complaints"
+    assert not relevant(q, {"title": "McDonald's", "url": "https://en.wikipedia.org/wiki/McDonald%27s",
+                            "snippet": "fast food restaurants worldwide"})
+    assert relevant(q, {"title": "Online restaurant booking", "url": "https://en.wikipedia.org/wiki/Booking",
+                        "snippet": ""})
+
+
+def test_empty_search_is_retried_without_the_place(monkeypatch):
+    from agents import researcher
+
+    seen = []
+
+    def search(q, max_results=3):
+        seen.append(q)
+        return [] if "Alexandria" in q else [{"title": f"r: {q}", "url": "https://a.example.org/x", "snippet": ""}]
+
+    monkeypatch.setattr(tools.search, "search", search)
+    monkeypatch.setattr(tools.credibility, "rate", lambda url: "B")
+    sources = researcher.gather_sources({"name": "a", "query": "restaurant booking widget Alexandria, Egypt"},
+                                        "Alexandria, Egypt")
+    assert seen == ["restaurant booking widget Alexandria, Egypt", "restaurant booking widget"] and len(sources) == 1
+
+
+def test_problem_queries_leave_out_the_location():
+    from agents.weigher import clean_areas
+
+    raw = [{"name": "pain", "focus": "problem", "weight": 1, "query": "freelancers late invoices Cairo Egypt"},
+           {"name": "tools", "focus": "competitors", "weight": 1, "query": "invoicing tools Egypt"}]
+    areas = clean_areas(raw, FULL_BRIEF)
+    assert areas[0]["query"] == "freelancers late invoices" and areas[1]["query"] == "invoicing tools Egypt"
+
+
+def test_problem_evidence_caps_follow_the_independent_sources():
+    from agents.scorer import evidence_caps
+
+    def pain(url, tier):
+        return {"text": "pain", "support": "url", "url": url, "tier": tier, "area": "problem_evidence"}
+
+    threads = [pain(f"https://www.reddit.com/r/jobs/comments/{i}/t/", "D") for i in "abc"]
+    assert evidence_caps(threads[:2])["problem_evidence"][0] == 2  # 2 independent sources
+    assert evidence_caps(threads)["problem_evidence"][0] == 2       # 3, but only tier D
+    assert "problem_evidence" not in evidence_caps(threads + [pain("https://www.bls.gov/x", "A")])
+
+
+def test_criterion_synonyms_map_to_the_rubric():
+    from agents.researcher import build_claims
+
+    sources = [{"url": "https://resos.example.com/cost", "tier": "B"}]
+    raw = [{"text": "Systems cost from free to 500 USD a month", "source": 0, "criterion": "pricing"},
+           {"text": "Tool X does this", "source": 0, "criterion": "Competitors"}]
+    assert [c["area"] for c in build_claims(raw, sources, 1)] == ["willingness_to_pay", "competition"]
+
+
+def test_search_outage_gives_repeat_not_stop(run, monkeypatch):
+    # Every web engine fails; only the encyclopedia fallback answers, with unrelated pages.
+    monkeypatch.setattr(tools.search, "search", lambda q, max_results=3: [
+        {"title": "Tesla, Inc.", "url": "https://en.wikipedia.org/wiki/Tesla", "snippet": "", "engine": "wikipedia"}])
+    r = orchestrator.start_run(FULL_BRIEF, "outage")
+    assert r["recommendation"] == "repeat"
+    assert any("could not be gathered" in reason for reason in r["reasons"])
+    entries = [e for e in log_entries(run) if e["agent"] == "researcher"]
+    assert entries and all(e["web_search_ok"] is False for e in entries)
 
 
 def test_competitor_price_counts_as_willingness_to_pay_evidence():

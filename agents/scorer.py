@@ -12,7 +12,7 @@ import re
 from typing import Any, Iterable
 
 from agents._common import ask_json, brief_for_model, claims_markdown, cut, model_fields
-from gates import criteria_names, load_rubric
+from gates import criteria_names, load_rubric, source_key
 from logger import log_action, write_output
 
 # Criteria that need research evidence; with none, the score is capped at WEAK
@@ -56,6 +56,12 @@ def evidence_caps(claims: Iterable[dict[str, Any]]) -> dict[str, tuple[float, st
             # The rubric scale says 0 = no evidence, and a 0 here stops the idea. Market figures
             # (population, internet use) say nothing about whether the pain is real.
             caps[name] = (0.0, "set to 0: no sourced claim shows the pain")
+        elif name == "problem_evidence":
+            independent = {source_key(c["url"]) for c in sourced}
+            if len(independent) < 3:
+                caps[name] = (2.0, f"capped at 2: {len(independent)} independent source(s) show the pain, 3 needed for more")
+            elif not [c for c in sourced if c.get("tier") in ("A", "B", "C")]:
+                caps[name] = (2.0, "capped at 2: only community signals (tier D) show the pain")
         elif not sourced:
             caps[name] = (WEAK, "capped at 1: no sourced claim for this criterion")
     return caps

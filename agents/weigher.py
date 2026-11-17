@@ -65,6 +65,13 @@ def clean_areas(raw: Any, brief: dict[str, Any]) -> list[dict[str, Any]]:
             areas[spare] = extra
         else:
             areas.append(extra)
+    # Pain is rarely written up per city: a problem query naming the place mostly finds nothing.
+    # Location stays in competitor and pricing queries, where it matters.
+    from agents.researcher import without_place
+
+    for a in areas:
+        if a["focus"] == "problem":
+            a["query"] = without_place(a["query"], brief.get("location")) or a["query"]
     total = sum(a["weight"] for a in areas)
     for i, a in enumerate(areas):
         a["weight"] = round(a["weight"] / total, 2) if total else round(1 / len(areas), 2)
