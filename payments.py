@@ -63,8 +63,11 @@ class MockStore:
     ledger: list[dict[str, Any]] = field(default_factory=list)
     processed: dict[str, dict[str, Any]] = field(default_factory=dict)  # idempotency key -> first result
     log_path: Optional[Path] = None  # decision_log.json by default
+    quiet: bool = False  # True for generated MOCKED datasets: nothing is logged, no approval is claimed
 
     def log(self, agent: str, action: str, approved_by: Optional[str] = None, **extra: Any) -> None:
+        if self.quiet:
+            return
         log_action(agent=agent, action=action, sources=[], model=None, cost=0, approved_by=approved_by,
                    log_path=self.log_path, mocked=True, **extra)
 
@@ -174,6 +177,28 @@ def _apply_payment(store: MockStore, event: dict[str, Any]) -> dict[str, Any]:
     store.log("payments", "payment_succeeded", order_id=order["order_id"], amount=event["amount"], fee=event["fee"])
     token = deliver(store, order["order_id"])
     return {"event": event["type"], "order_id": order["order_id"], "status": order["status"], "token": token}
+
+
+def mock_sales_data(price: int = 25000, currency: str = "EGP") -> MockStore:
+    """A fixed MOCKED dataset for Phase 6: 6 orders, 4 paid, 1 of them refunded, 2 left unpaid.
+
+    MOCKED: no real customers or sales. The store is quiet: nothing goes to decision_log.json
+    and no founder approval is claimed, because nothing is published. The listing is inserted
+    directly and marked as a MOCKED dataset.
+    """
+    from refunds import apply_refund
+
+    store = MockStore(quiet=True)
+    store.listings["mock"] = {"product_id": "mock", "title": "MOCKED dataset", "price": price, "currency": currency,
+                              "copy": "", "status": "MOCKED dataset: not published, no founder approval asked"}
+    orders = [create_order(store, "mock", f"cust_{i:03d}") for i in range(1, 7)]
+    for order in orders[:4]:
+        handle_event(store, mock_payment_event(store, order["order_id"]))
+    payment = store.payments[orders[1]["order_id"]]
+    store.processed[f"ref_{orders[1]['order_id']}"] = apply_refund(store, {
+        "type": "refund.succeeded", "id": f"evt_ref_{orders[1]['order_id']}", "order_id": orders[1]["order_id"],
+        "amount": payment["amount"], "currency": currency, "reason": "MOCKED refund", "mocked": True})
+    return store
 
 
 def run_payment_test(out_path: Optional[Path] = None, log_path: Optional[Path] = None) -> Path:

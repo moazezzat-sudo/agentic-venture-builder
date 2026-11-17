@@ -442,6 +442,8 @@ TEXT_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\b(refund|charge|bill|debit)\w*\b.{0,30}\b(the customer|customers|their card|my card|the card|users?|buyers?|\$\s?\d[\d,.]*)\b",
         r"\b(log ?in|sign ?in|access)\b.{0,20}\b(my|the|our|their)\b.{0,10}\b(bank|paypal|stripe|wise|payoneer|brokerage) account\b",
         r"\b(hold|keep|manage|store)\b.{0,20}\b(customer|client|user)s?'? (money|funds|payments)\b",
+        # First person: "I've refunded your payment", "we have transferred the money to you"
+        r"\b(i|we)('ve|'ll| have| will| just| already)*\s+(refunded|refund|transferred|transfer|sent|send|moved|wired|charged|charge|credited)\b.{0,25}\b(you|your|the money|money|payment|funds|amount|\$\s?\d)",
     ),
     "account_creation": (
         r"\b(create|open|register|set up|make)\b.{0,20}\b(an? |new |my |the )?(\w+ )?accounts?\b.{0,20}\b(for me|on my behalf|for the founder|in my name|for (each|every|all|our) (users?|customers?))\b",

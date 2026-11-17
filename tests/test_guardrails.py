@@ -207,6 +207,8 @@ VIOLATIONS = [
     ("Transfer the money to my supplier tonight", "money_handling"),
     ("Refund the customer automatically if they complain", "money_handling"),
     ("Log in to my Stripe account and check the balance", "money_handling"),
+    ("I've refunded your payment, it should arrive in 3 days", "money_handling"),
+    ("We have transferred the money to your account", "money_handling"),
     ("Create a Stripe account for me", "account_creation"),
     ("Create 20 fake accounts to test sign-ups", "account_creation"),
     ("Sign me up for Gumroad and Shopify", "account_creation"),
@@ -253,6 +255,7 @@ CLEAN = [
     "Ne jamais écrire de faux avis.",
     "لا تكتب تقييمات مزيفة",
     "We refuse to add countdown timers.",
+    "I have passed your refund request to the founder, who will reply to you.",
 ]
 
 
