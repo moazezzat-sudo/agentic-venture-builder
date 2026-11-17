@@ -18,18 +18,18 @@ Anything else raises MissingDecisionError (no explicit True/False, an unknown
 outcome) or InconsistentDecisionError (an "approval" that changes the outcome,
 a "rejection" that keeps it), so the run cannot continue on an unclear answer.
 
-Every decision is appended to decision_log.json with approved_by="founder",
-the recommendation, the founder's outcome and note. A founder overriding a
-stop is recorded with overrode_stop=True so the app and the gate file can
-show it.
+record_decision only validates and builds the FounderDecision; it writes
+nothing. The decision is logged once, by the gate node in orchestrator.py, at
+the moment it takes effect (after checking it is for the gate the run is
+waiting at): one decision_log.json entry "<gate>_founder_decision" with
+approved_by="founder" (team decision, 16:00). A decision that is built but
+never sent to the run therefore leaves no trace and moves nothing.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Optional, Union, get_args
+from typing import Any, Union, get_args
 
-from logger import log_action
 from schemas import FounderDecision, GateResult, Outcome
 
 STUBBED = False
@@ -59,11 +59,10 @@ def record_decision(
     approved: bool,
     outcome: str,
     note: str = "",
-    log_path: Optional[Path] = None,
 ) -> FounderDecision:
-    """Validate the founder's approve/reject at a gate, log it, and return the FounderDecision.
+    """Validate the founder's approve/reject at a gate and return the FounderDecision.
 
-    log_path overrides decision_log.json (for tests).
+    Writes nothing: the gate node logs the decision when the run resumes with it.
     """
     if not isinstance(run_id, str) or not run_id.strip():
         raise ValueError("run_id must be a non-empty string")
@@ -82,33 +81,14 @@ def record_decision(
             f"rejecting the recommendation {gate.recommendation!r} needs a different outcome"
         )
 
-    overrides = outcome != gate.recommendation
-    decision = FounderDecision(
+    return FounderDecision(
         phase=gate.phase,
         gate=gate.gate,
         approved=approved,
         outcome=outcome,  # type: ignore[arg-type]
         note=(note or "").strip(),
-        overrides_recommendation=overrides,
+        overrides_recommendation=outcome != gate.recommendation,
     )
-    log_action(
-        agent="founder",
-        action=f"{'approve' if approved else 'reject'}_{gate.gate}",
-        sources=[],
-        model=None,
-        cost=0,
-        approved_by="founder",
-        log_path=log_path,
-        run_id=run_id.strip(),
-        phase=gate.phase,
-        gate=gate.gate,
-        recommendation=gate.recommendation,
-        outcome=decision.outcome,
-        overrides_recommendation=overrides,
-        overrode_stop=gate.recommendation == "stop" and outcome != "stop",
-        note=decision.note,
-    )
-    return decision
 
 
 __all__ = ["record_decision", "MissingDecisionError", "InconsistentDecisionError", "OUTCOMES", "STUBBED"]

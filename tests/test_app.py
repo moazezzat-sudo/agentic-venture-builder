@@ -163,10 +163,13 @@ def test_brief_questions_gate_and_founder_decision(at):
     record.click().run()
     assert not at.exception
 
-    # The founder's decision was logged before the run resumed, and the run shows it stopped
+    # The run resumed with the founder's FounderDecision (the real gate node logs it), and shows it stopped.
+    # The app itself writes no founder entry: one decision, one log entry.
+    from schemas import FounderDecision
+
     kind, decision, _ = at.calls[2]
-    assert kind == "resume" and decision.outcome == "stop" and decision.approved is True
+    assert kind == "resume" and isinstance(decision, FounderDecision)
+    assert decision.gate == "gate_1" and decision.outcome == "stop" and decision.approved is True
     entries = json.loads(at.log.read_text(encoding="utf-8"))
-    founder = [e for e in entries if e["action"] == "approve_gate_1"]
-    assert len(founder) == 1 and founder[0]["approved_by"] == "founder"
+    assert not [e for e in entries if e.get("approved_by") == "founder"]
     assert any("Run stopped" in e.value for e in at.error)

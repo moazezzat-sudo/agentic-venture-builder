@@ -7,8 +7,8 @@ Flow: brief form -> orchestrator.start_run -> the run pauses for the founder:
                     a form; answers go back with orchestrator.resume_run.
   kind "gate"       a gate recommendation: evidence, scorecard and a gate card.
                     Approve or Reject (then choose the outcome), with a note.
-                    approval.record_decision logs it with approved_by="founder";
-                    only then is the run resumed. Nothing moves on without it.
+                    approval.record_decision checks it, and the run resumes with it;
+                    the gate logs it with approved_by="founder". Nothing moves on without it.
 The page also shows every claim with its tier and link, the run's tokens and cost
 (from decision_log.json), the files in outputs/, and MOCKED/STUBBED labels.
 """
